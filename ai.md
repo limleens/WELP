@@ -1,11 +1,12 @@
-# AI usage disclosure — PacePal
+# AI usage disclosure — WELP
 
 > **Important:** This is a starting disclosure generated with AI assistance. Review and edit it before submission to reflect what you actually did, verified, and changed.
 
 ## Coding assistance
 
 - **OpenAI ChatGPT (GPT-6)** was used to brainstorm the product concept, scope the prototype, draft JavaScript/CSS/HTML modules, create unit tests, and prepare initial documentation.
-- The application code and all claims must be reviewed by the submitting developer. Static logic tests can be run using `node --test tests/*.test.mjs`.
+- ChatGPT also assisted with the WELP rebrand, rep correction, weekly summaries, robustness fixes, documentation, and automated tests.
+- The application code and all claims must be reviewed by the submitting developer. Static logic tests can be run using `node --test tests/engine.test.mjs`.
 
 ## Models and AI in the application
 
