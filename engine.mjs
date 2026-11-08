@@ -100,7 +100,17 @@ export class RepCounter {
     }
     return { reps: this.reps, signal: raw, counted };
   }
-  manual() { this.reps += 1; return this.reps; }
+  suspend() {
+    this.phase = 'start';
+    this.candidate = null;
+    this.candidateSince = 0;
+  }
+  adjust(delta) {
+    this.reps = Math.max(0, this.reps + delta);
+    this.suspend();
+    return this.reps;
+  }
+  manual() { return this.adjust(1); }
 }
 
 /** Deterministic conservative suggestions; not a fitness prescription. */
@@ -124,10 +134,26 @@ export function suggestTarget(history = [], exercise = 'squat') {
   return { target: prior, explanation: 'Keep the same target and focus on a comfortable session.' };
 }
 
+/** Recent workout summary. Invalid timestamps are ignored. */
+export function weeklySummary(history = [], now = new Date()) {
+  const cutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const recent = history.filter(h => {
+    const time = new Date(h.at).getTime();
+    return Number.isFinite(time) && time >= cutoff && time <= now.getTime() && EXERCISES[h.exercise];
+  });
+  return {
+    sessions: recent.length,
+    reps: recent.filter(h => h.exercise !== 'plank').reduce((sum, h) => sum + Math.max(0, Number(h.completed) || 0), 0),
+    minutes: Math.round(recent.reduce((sum, h) => sum + Math.max(0, Number(h.duration) || 0), 0) / 60),
+  };
+}
+
 export function parseVoiceCommand(text = '') {
   const lower = text.toLowerCase().trim();
   if (/\b(stop|finish|end)( the| my| this)? (workout|set|session)\b/.test(lower) || /^(done|finish|end workout)$/.test(lower)) return { action: 'finish' };
-  if (/\b(pause|hold on|take a break)\b/.test(lower)) return { action: 'pause' };
+  if (/\b(pause|hold on|take a break|need a break)\b/.test(lower) || /^(stop|stop please)$/.test(lower)) return { action: 'pause' };
+  if (/\b(undo|remove (the )?(last )?rep|subtract (a )?rep|that wasn't a rep)\b/.test(lower)) return { action: 'undo' };
+  if (/\b(how (was|did) (my|i) (week|do this week)|this week's progress|weekly summary)\b/.test(lower)) return { action: 'weekly' };
   if (/\b(resume|continue)\b/.test(lower)) return { action: 'resume' };
   if (/\b(start|begin|let's go|lets go)\b/.test(lower)) return { action: 'start' };
   if (/\b(easier|too hard|struggling|can't do|cannot do|tired)\b/.test(lower)) return { action: 'easier' };
