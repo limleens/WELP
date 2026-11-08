@@ -1,9 +1,10 @@
-import { EXERCISES, RepCounter, parseVoiceCommand, suggestTarget } from './engine.mjs';
+import { EXERCISES, RepCounter, parseVoiceCommand, suggestTarget, weeklySummary } from './engine.mjs';
 
 const $ = id => document.getElementById(id);
 const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 const mpCdn = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision';
-const HISTORY_KEY = 'pacepal-history-v1';
+const HISTORY_KEY = 'welp-history-v1';
+const LEGACY_HISTORY_KEY = 'pacepal-history-v1';
 const HISTORY_MAX = 150;
 
 let history = loadHistory();
@@ -18,7 +19,7 @@ const state = {
 
 function loadHistory() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem(LEGACY_HISTORY_KEY) || '[]');
     return Array.isArray(parsed) ? parsed.filter(x => x && EXERCISES[x.exercise] && Number.isFinite(Number(x.completed))) : [];
   } catch { return []; }
 }
@@ -69,6 +70,7 @@ function updateProgress() {
   $('finishBtn').disabled = state.mode === 'ready';
   $('exerciseSelect').disabled = state.mode !== 'ready';
   $('manualBtn').disabled = state.mode !== 'active' || state.exercise === 'plank';
+  $('undoBtn').disabled = state.mode !== 'active' || state.exercise === 'plank' || state.count <= 0;
   if (state.mode === 'active' && !state.reachAnnounced && amount >= state.target) {
     state.reachAnnounced = true;
     speak('Target reached! Nice work. Say finish workout to save this session.');
@@ -117,6 +119,7 @@ function pauseSession() {
   state.elapsedBeforePause = elapsedSec();
   state.startedAt = null;
   state.mode = 'paused';
+  repCounter.suspend();
   speak('Paused. Take your time. Say resume when you are ready.');
   updateProgress();
 }
@@ -137,11 +140,13 @@ function finishSession() {
   renderHistory();
   speak(`Workout saved. You completed ${complete} ${EXERCISES[state.exercise].unit}. Your next suggested goal is ${state.target}.`);
 }
-function manualRep() {
+function adjustRep(delta) {
   if (state.mode !== 'active' || state.exercise === 'plank') return;
-  state.count = repCounter.manual();
+  state.count = repCounter.adjust(delta);
+  if (state.count < state.target) state.reachAnnounced = false;
   updateProgress();
 }
+function manualRep() { adjustRep(1); }
 function changeDifficulty(direction) {
   if (state.mode === 'ready') {
     state.target = Math.max(state.exercise === 'plank' ? 10 : 4, state.target + direction * (state.exercise === 'plank' ? 5 : 2));
@@ -163,6 +168,12 @@ function onVoice(text) {
     case 'finish': finishSession(); break;
     case 'easier': changeDifficulty(-1); break;
     case 'harder': changeDifficulty(1); break;
+    case 'undo': adjustRep(-1); speak('Last rep removed.'); break;
+    case 'weekly': {
+      const summary = weeklySummary(history);
+      speak(summary.sessions ? `Over the last seven days, you logged ${summary.sessions} sessions and ${summary.reps} repetitions.` : 'No saved workouts this week yet. Start a session when you are ready.');
+      break;
+    }
     case 'progress': {
       const current = state.exercise === 'plank' ? Math.floor(elapsedSec()) : state.count;
       const remaining = Math.max(0, state.target - current);
@@ -170,7 +181,7 @@ function onVoice(text) {
       break;
     }
     case 'exercise': selectExercise(command.exercise); break;
-    case 'help': speak('Try start workout, pause, resume, make it easier, how many reps left, or finish workout.'); break;
+    case 'help': speak('Try start workout, pause, resume, make it easier, undo rep, how was my week, or finish workout.'); break;
     default: speak('I did not catch a workout command. Say help to hear the available commands.');
   }
 }
@@ -262,7 +273,10 @@ function poseLoop(now) {
           if (state.count > 0 && state.count % 5 === 0 && state.count < state.target) speak(`${state.count} reps. Keep it up!`);
         }
       }
-      if (!points) $('poseMessage').textContent = 'No body detected. Try stepping back into the frame.';
+      if (!points) {
+        repCounter.suspend();
+        $('poseMessage').textContent = 'No body detected. Try stepping back into the frame.';
+      }
       else if (state.exercise !== 'plank' && state.mode === 'active') $('poseMessage').textContent = 'Pose detected · tracking movement';
     } catch(error) { $('poseMessage').textContent = `Camera tracking error: ${error.message}`; }
   }
@@ -316,6 +330,7 @@ function stopCamera() {
   $('camera').srcObject = null;
   state.landmarker?.close();
   state.landmarker = null;
+  repCounter.suspend();
   const canvas=$('overlay');canvas.getContext('2d')?.clearRect(0,0,canvas.width,canvas.height);
   $('cameraEmpty').classList.remove('hidden');
   $('cameraLiveLabel').classList.add('hidden');
@@ -326,6 +341,7 @@ function stopCamera() {
 }
 function renderHistory() {
   $('totalSessions').textContent = history.length;
+  $('weeklySessions').textContent = weeklySummary(history).sessions;
   $('totalReps').textContent = history.filter(h => h.exercise !== 'plank').reduce((acc,h)=>acc+Number(h.completed),0);
   $('totalMinutes').textContent = Math.round(history.reduce((acc,h)=>acc+Number(h.duration||0),0)/60);
   const container=$('historyList');container.replaceChildren();
@@ -358,13 +374,16 @@ function init() {
   $('startBtn').addEventListener('click',startSession);
   $('finishBtn').addEventListener('click',finishSession);
   $('manualBtn').addEventListener('click',manualRep);
+  $('undoBtn').addEventListener('click',()=>adjustRep(-1));
   $('easierBtn').addEventListener('click',()=>changeDifficulty(-1));
   $('harderBtn').addEventListener('click',()=>changeDifficulty(1));
   $('micBtn').addEventListener('click',toggleMicrophone);
   $('effort').addEventListener('input',e=>$('effortValue').textContent=`${e.target.value}/10`);
   $('clearHistory').addEventListener('click',()=>{
-    if (!confirm('Delete all PacePal workout history stored in this browser?')) return;
-    history=[]; saveHistory(); renderHistory(); if(state.mode==='ready')updateSuggestion();
+    if (!confirm('Delete all WELP workout history stored in this browser?')) return;
+    history=[]; saveHistory();
+    try { localStorage.removeItem(LEGACY_HISTORY_KEY); } catch {}
+    renderHistory(); if(state.mode==='ready')updateSuggestion();
   });
   setInterval(()=>{
     if (state.mode !== 'active') return;
