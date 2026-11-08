@@ -1,8 +1,8 @@
-# PacePal: Your Workout, Your Pace
+# WELP: Home Workout Helper
 
 **Hiya Voice AI Challenge — Real-Time Assistance**
 
-**What I built.** PacePal is a voice-first home workout companion that combines speech recognition, on-device pose tracking, spoken coaching, session history, and adaptive workout targets. Users can begin a workout, ask about progress, pause, adjust difficulty, or finish a session without touching their screen. The prototype includes camera-based repetition counting for bodyweight squats and jumping jacks, plus a simple plank timer.
+**What I built.** WELP is a voice-first home workout companion that combines speech recognition, on-device pose tracking, spoken coaching, session history, and adaptive workout targets. Users can begin a workout, ask about progress, pause, adjust difficulty, or finish a session without touching their screen. The prototype includes camera-based repetition counting for bodyweight squats and jumping jacks, plus a simple plank timer.
 
 **Who it's for.** People exercising at home without equipment, particularly beginners who want lightweight guidance and find constant tapping, timers, and manual repetition logging disruptive.
 
