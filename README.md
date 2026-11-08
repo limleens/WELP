@@ -1,15 +1,15 @@
-# PacePal — A Voice-First Adaptive Home Workout Companion
+# WELP — Home Workout Helper — A Voice-First Adaptive Fitness Companion
 
 **Track:** Real-Time Assistance — Hiya Voice AI Challenge 2026
 
-A minimal but working browser application for hands-free, equipment-free exercise. Uses webcam-based pose landmarks to count squats and jumping jacks, browser speech recognition for commands, text-to-speech coaching, local workout history, and transparent adaptive goals. Timed planks are included without pretending to verify correct form.
+A lightweight browser prototype for hands-free, equipment-free exercise. Uses webcam-based pose landmarks to count squats and jumping jacks, browser speech recognition for commands, text-to-speech coaching, local workout history, and transparent adaptive goals. Timed planks are included without pretending to verify correct form.
 
 ## Quick start
 
 Requires Python 3 and a modern browser (Chrome or Edge recommended).
 
 ```bash
-cd pacepal-starter
+cd WELP
 python -m http.server 8000
 ```
 
@@ -29,6 +29,8 @@ Open **http://localhost:8000** in Chrome. Do **not** open `index.html` as a `fil
 - `make it easier`, `make it harder`
 - `how many reps left?`
 - `squats`, `jumping jacks`, `plank` (only between sessions)
+- `undo rep` — correct an overcounted repetition
+- `how was my week?` — summarize recent workouts
 - `help`
 
 ## Tech & implementation
@@ -45,12 +47,12 @@ Open **http://localhost:8000** in Chrome. Do **not** open `index.html` as a `fil
 Requires Node.js 18+ and no npm install:
 
 ```bash
-node --test tests/*.test.mjs
+node --test tests/engine.test.mjs
 ```
 
 ## Privacy and constraints
 
-- Webcam frames are processed by MediaPipe locally and are not stored by PacePal. The initial model/runtime files are downloaded from public CDNs.
+- Webcam frames are processed by MediaPipe locally and are not stored by WELP. The initial model/runtime files are downloaded from public CDNs.
 - Browser speech recognition may send audio to the browser vendor's recognition service. Explain this to demo participants and use with their consent.
 - Workout history is kept in the browser only and can be cleared in *My progress*.
 - Pose counting is experimental. It can miss or overcount reps due to occlusion, side/front camera positioning, clothing, distance, or lighting. A manual correction control is included.
@@ -73,6 +75,8 @@ node --test tests/*.test.mjs
 - `app.mjs` — UI, camera, speech, and storage integration.
 - `engine.mjs` — pure pose-based rep counter, adaptation rules, voice command parsing.
 - `tests/engine.test.mjs` — automated logic tests.
+- `ENGINEERING_NOTES.md` — design choices and Hiya engineer walkthrough.
+- `.github/workflows/tests.yml` — automated syntax and unit-test checks.
 - `ai.md` — AI tool disclosure.
 - `one-page-writeup.md` — submission draft; edit with your own results.
 
