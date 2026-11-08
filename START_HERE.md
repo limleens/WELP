@@ -1,6 +1,6 @@
-# Start here — PacePal
+# Start here — WELP
 
-This starter is a **working browser application prototype** with tested non-camera logic. The webcam-based pose tracking and live browser speech features still need manual testing on your own laptop; they cannot be validated by the automated unit tests alone.
+This starter is a **browser application prototype** with tested non-camera logic. The webcam-based pose tracking and live browser speech features still need manual testing on your own laptop; they cannot be validated by the automated unit tests alone.
 
 ## First 10 minutes
 
