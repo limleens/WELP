@@ -115,7 +115,9 @@ export class HiitSession {
   extendRest(seconds=15) {
     if(this.status!=='active'&&this.status!=='paused') return false;
     if(this.stage?.kind!=='rest') return false;
-    this.remaining+=clamp(Math.round(seconds),5,120);
+    const extra=clamp(Math.round(seconds),5,120);
+    this.remaining+=extra;
+    this.stage.seconds+=extra;
     return true;
   }
   takeBreak(now, seconds=25) {
@@ -159,8 +161,10 @@ export class HiitSession {
       if(item.kind!=='rest')continue;
       const original=i===this.index?this.remaining:item.seconds;
       const adjusted=clamp(Math.round(original+delta),8,120);
-      if(i===this.index)this.remaining=adjusted;
-      else item.seconds=adjusted;
+      if(i===this.index) {
+        this.remaining=adjusted;
+        item.seconds=Math.max(adjusted,item.seconds+(adjusted-original));
+      } else item.seconds=adjusted;
       updated=true;
     }
     return updated;
