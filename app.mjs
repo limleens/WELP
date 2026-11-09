@@ -144,7 +144,10 @@ function onStageChanged(previous) {
 }
 function endCircuit(reason='finished',previous=state.hiit?.stage) {
   if(!state.hiit) return;
-  if(previous?.kind==='work')recordCurrentWork();
+  if(previous?.kind==='work'){
+    state.hiitReps+=previous.exercise==='plank'?0:state.count;
+    state.hiitSegments.push({exercise:previous.exercise,reps:state.count,plannedSeconds:previous.seconds});
+  }
   const ses=state.hiit;
   if(ses.status!=='complete') {ses.pause(Date.now());ses.status='complete';}
   state.mode='ready';state.startedAt=null;state.elapsedBeforePause=0;
@@ -210,7 +213,7 @@ function setCoach(text, heard = null) {
 }
 function speak(text) {
   setCoach(text);
-  if (!state.listening || !('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) return;
   state.speaking = true;
   try { state.recognition?.stop(); } catch { /* may already be stopped */ }
   window.speechSynthesis.cancel();
@@ -230,17 +233,17 @@ function updateProgress() {
   $('completed').textContent = amount;
   $('overlayCount').textContent = amount;
   $('elapsed').textContent = formatClock(elapsedSec());
-  $('targetDisplay').textContent = state.target;
-  $('targetUnit').textContent = EXERCISES[state.exercise].unit;
+  $('targetDisplay').textContent = state.hiit?.status==='active'||state.hiit?.status==='paused' ? Math.ceil(state.hiit.remaining) : state.target;
+  $('targetUnit').textContent = state.hiit && state.hiit.status!=='complete' ? 'seconds left' : EXERCISES[state.exercise].unit;
   $('overlayUnit').textContent = EXERCISES[state.exercise].unit.toUpperCase();
   $('sessionStatus').textContent = state.mode === 'active' ? '● ACTIVE' : state.mode === 'paused' ? '◉ PAUSED' : '● READY';
   $('sessionStatus').classList.toggle('live', state.mode === 'active');
   $('startBtn').textContent = state.mode === 'active' ? 'Ⅱ Pause session' : state.mode === 'paused' ? '▶ Resume session' : '▶ Start session';
   $('finishBtn').disabled = state.mode === 'ready';
-  $('exerciseSelect').disabled = state.mode !== 'ready';
-  $('manualBtn').disabled = state.mode !== 'active' || state.exercise === 'plank';
-  $('undoBtn').disabled = state.mode !== 'active' || state.exercise === 'plank' || state.count <= 0;
-  if (state.mode === 'active' && !state.reachAnnounced && amount >= state.target) {
+  $('exerciseSelect').disabled = state.mode !== 'ready' || !!state.hiit;
+  $('manualBtn').disabled = state.mode !== 'active' || state.exercise === 'plank' || (state.hiit && state.hiit.stage?.kind!=='work');
+  $('undoBtn').disabled = state.mode !== 'active' || state.exercise === 'plank' || state.count <= 0 || (state.hiit && state.hiit.stage?.kind!=='work');
+  if (!state.hiit && state.mode === 'active' && !state.reachAnnounced && amount >= state.target) {
     state.reachAnnounced = true;
     speak('Target reached! Nice work. Say finish workout to save this session.');
   }
@@ -266,6 +269,7 @@ function selectExercise(key) {
   setCoach(`${EXERCISES[key].name} selected. ${EXERCISES[key].cue}`);
 }
 function startSession() {
+  if (state.hiit) {startCircuit();return;}
   if (state.mode === 'active') { pauseSession(); return; }
   if (state.mode === 'paused') {
     state.startedAt = Date.now();
@@ -285,6 +289,7 @@ function startSession() {
 }
 function pauseSession() {
   if (state.mode !== 'active') return;
+  if (state.hiit && state.hiit.status==='active') state.hiit.pause(Date.now());
   state.elapsedBeforePause = elapsedSec();
   state.startedAt = null;
   state.mode = 'paused';
@@ -293,6 +298,7 @@ function pauseSession() {
   updateProgress();
 }
 function finishSession() {
+  if (state.hiit) {if(state.hiit.status!=='ready' && state.hiit.status!=='complete')endCircuit('saved early');return;}
   if (state.mode === 'ready') { speak('Start a session first.'); return; }
   const seconds = Math.round(elapsedSec());
   const complete = state.exercise === 'plank' ? Math.min(seconds, 3600) : state.count;
@@ -310,13 +316,20 @@ function finishSession() {
   speak(`Workout saved. You completed ${complete} ${EXERCISES[state.exercise].unit}. Your next suggested goal is ${state.target}.`);
 }
 function adjustRep(delta) {
-  if (state.mode !== 'active' || state.exercise === 'plank') return;
+  if (state.mode !== 'active' || state.exercise === 'plank' || (state.hiit && state.hiit.stage?.kind!=='work')) return;
   state.count = repCounter.adjust(delta);
+  state.lastRepAt=Date.now();
   if (state.count < state.target) state.reachAnnounced = false;
   updateProgress();
 }
 function manualRep() { adjustRep(1); }
 function changeDifficulty(direction) {
+  if (state.hiit) {
+    if(direction<0 && ['active','paused'].includes(state.hiit.status)){
+      state.hiit.makeEasier();renderHiitClock();speak('I shortened the remaining intervals and lengthened breaks. Would you like a break now?');state.pendingVoice='break';
+    } else speak('You can choose a different workout intensity in your preferences before starting your next circuit.');
+    return;
+  }
   if (state.mode === 'ready') {
     state.target = Math.max(state.exercise === 'plank' ? 10 : 4, state.target + direction * (state.exercise === 'plank' ? 5 : 2));
   } else {
@@ -329,6 +342,7 @@ function changeDifficulty(direction) {
 }
 function onVoice(text) {
   $('heardText').textContent = `You said: “${text}”`;
+  if(state.hiit){onHiitVoice(text);return;}
   const command = parseVoiceCommand(text);
   switch (command.action) {
     case 'start': if (state.mode === 'ready') startSession(); else speak('Your workout has already started.'); break;
@@ -352,6 +366,62 @@ function onVoice(text) {
     case 'exercise': selectExercise(command.exercise); break;
     case 'help': speak('Try start workout, pause, resume, make it easier, undo rep, how was my week, or finish workout.'); break;
     default: speak('I did not catch a workout command. Say help to hear the available commands.');
+  }
+}
+
+function onHiitVoice(text) {
+  const command=parseCoachRequest(text,state.pendingVoice);
+  // Handle the optional yes/no answer to a proactive fatigue check-in.
+  if(state.pendingVoice==='break' && command.action==='decline'){
+    state.pendingVoice=null;speak('All right. Keep moving at a pace that feels comfortable.');return;
+  }
+  if(command.action!=='unknown')state.pendingVoice=null;
+  switch(command.action){
+    case 'start': case 'resume':
+      if(state.hiit.status==='ready'||state.hiit.status==='paused')startCircuit();
+      else speak('The circuit is already underway.');
+      break;
+    case 'pause':pauseSession();break;
+    case 'finish':finishSession();break;
+    case 'safety':
+      if(state.mode==='active')pauseSession();
+      speak('Stop exercising and rest. If you have severe symptoms, seek urgent medical help.');break;
+    case 'break':takeCircuitBreak();break;
+    case 'rest_longer':
+      if(state.hiit.stage?.kind==='rest' && state.hiit.extendRest(20)) {renderHiitClock();speak('Added twenty seconds to this break.');}
+      else takeCircuitBreak();
+      break;
+    case 'struggling':changeDifficulty(-1);break;
+    case 'harder':changeDifficulty(1);break;
+    case 'skip':{
+      if(state.hiit.status!=='active') {speak('Start the circuit before skipping.');break;}
+      const prev={...state.hiit.stage};
+      for(const e of state.hiit.skip(Date.now())) {
+        if(e.type==='completed')endCircuit('complete',prev);
+        else onStageChanged(prev);
+      }
+      break;
+    }
+    case 'time':
+      speak(`${Math.ceil(state.hiit.remaining)} seconds left in this interval. You're on step ${state.hiit.index+1} of ${state.hiit.stages.length}.`);break;
+    case 'next':{
+      const next=state.hiit.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
+      speak(next?'Up next is '+HIIT_EXERCISES[next.exercise].name+'.':'This is the final exercise.');break;
+    }
+    case 'progress':
+      if(state.hiit.stage?.kind==='work' && state.exercise!=='plank')speak(`${state.count} reps recorded this interval, and ${Math.ceil(state.hiit.remaining)} seconds left.`);
+      else speak(`${Math.ceil(state.hiit.remaining)} seconds left. Keep breathing comfortably.`);
+      break;
+    case 'undo':adjustRep(-1);speak('Last repetition removed.');break;
+    case 'help':speak('You can ask what is next, how much time is left, request a break, say make it easier, pause, skip, or finish workout.');break;
+    case 'unknown':{
+      const legacy=parseVoiceCommand(text);
+      if(legacy.action==='weekly'){
+        const recent=hiitHistory.filter(h=>Date.parse(h.at)>=Date.now()-7*86400000);
+        speak(`You logged ${recent.length} HIIT sessions in the last seven days.`);break;
+      }
+      speak('I can adjust your workout, offer a break, skip a step or answer questions about your progress. Could you rephrase your request?');
+    }
   }
 }
 
@@ -433,13 +503,15 @@ function poseLoop(now) {
       const result = state.landmarker.detectForVideo(video, now);
       const points = result.landmarks?.[0];
       drawPose(points);
-      if (state.mode === 'active' && points && state.exercise !== 'plank') {
+      if(points)state.lastBodyAt=Date.now();
+      if (state.mode === 'active' && points && state.exercise !== 'plank' && (!state.hiit || state.hiit.stage?.kind==='work')) {
         const estimate = repCounter.update(points, now);
         $('poseMessage').textContent = estimate.counted
           ? `Rep counted! ${estimate.detail}`
           : `${estimate.detail} · cycle ${estimate.phase}`;
         if (estimate.counted) {
           state.count = estimate.reps;
+          state.lastRepAt=Date.now();
           updateProgress();
           if (state.count > 0 && state.count % 5 === 0 && state.count < state.target) speak(`${state.count} reps. Keep it up!`);
         }
@@ -567,7 +639,10 @@ function init() {
   });
   setInterval(()=>{
     if (state.mode !== 'active') return;
-    if (state.exercise === 'plank') state.seconds = Math.floor(elapsedSec());
+    if (state.hiit) {
+      tickCircuit();
+      if(state.hiit.stage?.kind==='work' && state.exercise==='plank')state.seconds = Math.round(state.hiit.stage.seconds-state.hiit.remaining);
+    } else if (state.exercise === 'plank') state.seconds = Math.floor(elapsedSec());
     updateProgress();
   },250);
   window.addEventListener('pagehide',()=>{stopCamera();stopMicrophone();});
