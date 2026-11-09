@@ -71,9 +71,13 @@ function renderPlan() {
   renderHiitClock();
 }
 function createPlan() {
-  state.hiitPlan=buildHiitPlan(state.profile,history);
+  const past=hiitHistory.length
+    ? hiitHistory.map(h=>({...h,target:h.totalStages,completed:h.stagesCompleted}))
+    : history;
+  state.hiitPlan=buildHiitPlan(state.profile,past);
   state.hiit=new HiitSession(state.hiitPlan);
   state.hiitReps=0;
+  state.hiitStruggled=false;
   state.hiitSegments=[];
   state.mode='ready';
   state.exercise=state.hiit.stage.exercise || 'squat';
@@ -157,7 +161,7 @@ function endCircuit(reason='finished',previous=state.hiit?.stage) {
     intensity:state.profile.intensity,activeSeconds:Math.round(ses.activeSeconds),
     restSeconds:Math.round(ses.restSeconds),reps:state.hiitReps,
     stagesCompleted:ses.completedStages,totalStages:ses.stages.length,
-    exertion:Number($('effort').value),segments:state.hiitSegments};
+    exertion:Math.max(Number($('effort').value),state.hiitStruggled?8:0),segments:state.hiitSegments};
   hiitHistory.push(result);saveHiitHistory();
   const calories=estimateKcal(state.profile.weightKg,result.activeSeconds,state.profile.intensity);
   const summary=`Circuit ${reason}! ${result.reps} recorded reps across ${result.stagesCompleted} intervals. Active time ${formatClock(result.activeSeconds)}.${calories===null?'':' Rough estimated active energy '+calories+' kilocalories.'}`;
@@ -328,6 +332,7 @@ function manualRep() { adjustRep(1); }
 function changeDifficulty(direction) {
   if (state.hiit) {
     if(direction<0 && ['active','paused'].includes(state.hiit.status)){
+      state.hiitStruggled=true;
       state.hiit.makeEasier();renderHiitClock();speak('I shortened the remaining intervals and lengthened breaks. Would you like a break now?');state.pendingVoice='break';
     } else speak('You can choose a different workout intensity in your preferences before starting your next circuit.');
     return;
