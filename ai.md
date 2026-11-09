@@ -31,3 +31,7 @@
 - [ ] Verify spoken rest check-in every third break, shorter/longer rests and workout pause/resume.
 - [ ] Run `node --test tests/*.test.mjs` and view GitHub Actions.
 - [ ] List any other AI coding tools you used yourself (e.g., Cursor or Copilot).
+
+
+## Latency-focused iteration (November 9)
+ChatGPT reviewed public Gemini Live, LiveKit Agents, and Pipecat example repositories for **conceptual patterns only**; it did not copy code from them. It drafted an instant local command fast path, a browser speech-recognition restart manager, shortened voice cues, model request supersession, and regression tests. The applicant should verify speech responsiveness on real hardware. Full streaming/barge-in has **not** been implemented.
