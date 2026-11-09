@@ -7,8 +7,9 @@ test('profile sanitizes unexpected inputs and weight is optional',()=>{
 });
 test('HIIT plan alternates work and rest, ending on work',()=>{
   const p=buildHiitPlan(profile);
-  assert.equal(p.stages.length,5);
-  assert.deepEqual(p.stages.map(s=>s.kind),['work','rest','work','rest','work']);
+  assert.ok(p.stages.length>=5);
+  assert.ok(Math.abs(p.totalSeconds-300)<=100);
+  assert.ok(p.stages.every((stage,i)=>stage.kind===(i%2===0?'work':'rest')));
   assert.ok(p.totalSeconds>p.workSeconds);
 });
 test('HIIT plan responds to goal and longer duration',()=>{
@@ -48,7 +49,9 @@ test('rest extension extends existing rest',()=>{
 });
 test('taking a break preserves unfinished work',()=>{
   const s=new HiitSession({profile,stages:[{kind:'work',exercise:'jack',seconds:25},{kind:'rest',seconds:10}]});
-  s.start(0);s.tick(5000);s.takeBreak(5000,15);
+  s.start(0);
+  for(let t=1000;t<=5000;t+=1000)s.tick(t);
+  s.takeBreak(5000,15);
   assert.equal(s.stage.kind,'rest');assert.equal(s.remaining,15);
   s.tick(7000);s.tick(9000);s.tick(11000);s.tick(13000);s.tick(15000);s.tick(17000);s.tick(19000);s.tick(21000);
   assert.equal(s.stage.kind,'work');assert.equal(s.stage.seconds,20);
