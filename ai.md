@@ -1,29 +1,33 @@
-# AI usage disclosure — WELP
+# WELP — AI tools and model disclosure (Hiya Voice AI Challenge)
 
-This is a draft based on the development work completed with ChatGPT. The applicant should review, correct and supplement it before Hiya submission.
+> Applicant: verify and personalize this description before submission. Do not claim tests or providers you have not personally exercised.
 
-## AI tools used to build the prototype
+## AI tools used during development
 
-- **OpenAI ChatGPT (GPT-6):** Assisted with early ideation, scope reduction for the Hiya challenge, design/implementation of the HTML/CSS/JavaScript MVP, MediaPipe integration, posture-state heuristics, voice command interpretation, HIIT onboarding, the new interval state machine, automatic rest and fatigue check-ins, workout-history adaptation, automated tests, and documentation.
-- **GitHub connector:** ChatGPT read the repository and pushed changes to `feat/welp-home-workout-helper`, with the work maintained in Pull Request #1. GitHub Actions runs syntax and unit-test checks.
-- **Human input:** The applicant chose the product concept and HIIT direction, selected conversational-style coaching, tested early webcam movement tracking, and provided feedback that led to the tracker improvement. The applicant must still test the new guided HIIT session and speech features.
+- **OpenAI ChatGPT (GPT-6):** Helped brainstorm the project, choose the product direction, write and revise the browser UI, develop pose-based rep-counting rules, implement a HIIT plan/state machine, prototype a conversational Gemini connection with validated tool actions, create test cases, interpret GitHub Actions failures, and prepare documentation.
+- **GitHub connector and GitHub Actions:** Used to edit the linked source repository on a feature branch and run Node syntax checks and unit tests.
+- **User decisions and verification:** The applicant selected WELP, home HIIT, conversational coaching, and phone-first design; provided webcam tracking feedback and confirmed earlier movement-tracking improvements. Applicant still needs to manually test the optional Gemini, TTS, mobile UI and full guided workflow.
 
-## Models in the running app
+## AI used by the running prototype
 
-- **Google MediaPipe Pose Landmarker Lite** (pretrained): Estimates body pose landmarks on-device. WELP's own 2D geometry and state-machine rules count reps.
-- **Browser Web Speech API:** Speech-to-text and text-to-speech for spoken coaching and control. Browser speech recognition may use a remote service.
-- **Bounded natural-language parser:** `parseCoachRequest` handles multiple expressions and contextual follow-up answers, such as “yes” in response to “Do you need a break?” This is not a generative language model.
-- **Workout planner and intensity adaptation:** Transparent deterministic rules based on selected preferences and prior results. It does not infer health status or fatigue medically.
-- **Optional energy estimate:** Simple MET-based approximation, not model inference or a measured calorie count.
+1. **Google MediaPipe Pose Landmarker Lite:** A pretrained model locally estimates body landmarks from the camera. WELP uses a custom, rule-based state machine to count squats and jumping jacks. No exercise model was custom-trained.
+2. **Browser SpeechRecognition:** Transcribes spoken commands. Some browser implementations process speech on vendor servers. **Browser SpeechSynthesis** reads coaching text aloud.
+3. **Google Gemini** (optional, configured by the developer with `GEMINI_API_KEY` on a local Node server): Conversational text model maps free-form user speech into a brief natural reply and a structured workout action. The app validates action types, exercise names, repetition counts and time adjustments before applying them. **The API key never goes into frontend code.** Without a key, the app uses an extended deterministic phrase interpreter.
+4. **Optional Gemini TTS:** An optional server-side expressive speech model is enabled by `GEMINI_TTS=1`; browser voices are used if unavailable or too slow. TTS costs and responsiveness depend on model access.
 
-## Not used
+## What isn't claimed
 
-No custom-trained rep classifier, general-purpose LLM at inference time, cloud account database, medically validated exercise analysis or safety-critical fitness prescription.
+- WELP is **not** an autonomous medical or fitness-prescription agent.
+- Gemini does not have authority to bypass the workout controller's constraints.
+- The voice coach does not diagnose exhaustion from silence or camera input; it asks for user feedback.
+- Optional caloric expenditure is an approximation, not a measured value.
+- Real-world speech quality, latency and exercise-count accuracy are not established by unit tests.
 
-## Verify before submitting
+## Before submitting
 
-- [ ] Run `node --test tests/*.test.mjs` and record the result.
-- [ ] Test one complete camera + microphone HIIT circuit in Chrome.
-- [ ] Verify breaks, skips, transitions, saved history and “make it easier.”
-- [ ] Explain the choice of deterministic session actions versus unrestricted LLM generation.
-- [ ] Add any other AI tools actually used (e.g. Cursor, Copilot).
+- [ ] Confirm actual Gemini API availability with your own key (and avoid exposing it).
+- [ ] Test voice transcription, conversational response, and voice playback in Chrome.
+- [ ] Try adding "10 more jumping jacks" and verify a real rep-target interval appears.
+- [ ] Verify spoken rest check-in every third break, shorter/longer rests and workout pause/resume.
+- [ ] Run `node --test tests/*.test.mjs` and view GitHub Actions.
+- [ ] List any other AI coding tools you used yourself (e.g., Cursor or Copilot).
