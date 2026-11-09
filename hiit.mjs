@@ -136,6 +136,36 @@ export class HiitSession {
     }
     this.remaining=this.stage.kind==='work'?Math.max(8,Math.round(this.remaining*.8)):this.remaining+5;
   }
+  adjustRests(deltaSeconds) {
+    if(!['ready','active','paused'].includes(this.status))return false;
+    const delta=clamp(Math.round(Number(deltaSeconds)||0),-60,60);
+    let updated=false;
+    for(let i=this.index;i<this.stages.length;i++) {
+      const item=this.stages[i];
+      if(item.kind!=='rest')continue;
+      const original=i===this.index?this.remaining:item.seconds;
+      const adjusted=clamp(Math.round(original+delta),8,120);
+      if(i===this.index)this.remaining=adjusted;
+      else item.seconds=adjusted;
+      updated=true;
+    }
+    return updated;
+  }
+  addExercise(exercise,{targetReps=null,seconds=30}={}) {
+    if(!['ready','active','paused'].includes(this.status))return false;
+    if(!['squat','jack','plank'].includes(exercise)||this.stages.length>70)return false;
+    const target=targetReps==null?null:clamp(Math.round(targetReps),3,40);
+    const work={kind:'work',exercise,seconds:target?120:clamp(Math.round(seconds),15,60),
+      targetReps:target,extra:true,round:this.stage?.round||1};
+    // Insert after the upcoming scheduled recovery when one exists.
+    const next=this.stages[this.index+1];
+    const insertAt=this.index+1+(this.stage?.kind==='work'&&next?.kind==='rest'?1:0);
+    this.stages.splice(insertAt,0,work);
+    // If another work interval immediately follows, add a small rest after the new interval.
+    if(this.stages[insertAt+1]?.kind==='work')
+      this.stages.splice(insertAt+1,0,{kind:'rest',seconds:20,extra:true,round:work.round});
+    return true;
+  }
   skip(now) {
     if(this.status==='active') this.tick(now);
     if(!['active','paused'].includes(this.status)) return [];
