@@ -1,44 +1,49 @@
-# Start here — WELP HIIT prototype
+# WELP — Start here (voice-first demo)
 
-**Pull request:** https://github.com/limleens/WELP/pull/1  
-**Challenge deadline:** Wednesday, 11 November 2026, 11:59 PM GMT
+**Branch:** `feat/welp-home-workout-helper` · **Hiya deadline:** Wed 11 Nov 2026, 11:59pm GMT
 
-## Try the guided workout (Chrome recommended)
+## 1. Run WELP without any AI account
 
 ```bash
 git clone https://github.com/limleens/WELP.git
 cd WELP
 git switch feat/welp-home-workout-helper
-python -m http.server 8000
+node server.mjs
 ```
 
-Open **http://localhost:8000**; grant camera/mic permissions when prompted.
+Use Node.js 22+. Open **http://localhost:8000** in Chrome.
 
-1. Enter a goal (e.g., Improve cardio), experience (Beginner), intensity (Light/Moderate), and quick 5-minute session; leave weight blank unless you want a rough calorie estimate.
-2. Click **Build my HIIT circuit**. Review the timed work/rest schedule.
-3. Click **Enable camera**, wait until the status says **Pose tracking ready**. Frame your entire body; squats side-on, jumping jacks facing forward.
-4. Press the microphone button, then say **"start workout"**. Alternatively press **Start guided HIIT**. If speech recognition does not work, type commands into **Ask coach**; spoken outputs may still work.
-5. Perform repetitions and watch the timer and rep counter. At a rest period, WELP should speak the transition and name the next exercise.
-6. Ask **"how much time is left?"**, **"what's next?"**, **"I'm exhausted, make it easier"**, **"give me more rest"**, **"repeat instructions"**, **"skip this"**, or **"finish workout"**.
-7. Test pause/resume and an inserted recovery break. Finish and open **My progress**; saved circuits should remain after refreshing the page.
-8. Generate the next circuit and check that recent difficulty influences the plan.
+Build a workout from the welcome screen. Enable your camera and mic. Say **"start workout"**, try a few squats, and ask **"how much time left?"**. Basic speech interpretation is available without any Gemini key.
 
-## Run logic tests
+## 2. Turn on actual Gemini conversation
+
+1. Create a key through https://aistudio.google.com/apikey.
+2. Copy `.env.example` to `.env` and set `GEMINI_API_KEY=...`. **Don't post the key in chat or push it to GitHub.**
+3. Run `node --env-file=.env server.mjs`.
+4. Refresh localhost and turn on **Gemini conversation** in the coach area. You explicitly opt in to sending short transcripts and limited current-workout context to Google's service; camera video stays local.
+5. Say *"Can you help me track ten more jumping jacks?"* and check that WELP adds a real interval.
+6. Optional: set `GEMINI_TTS=1` and restart to enable **Expressive AI voice**. This can be slower; leave it off if responsiveness is more important.
+
+## 3. Verify the new voice-first behaviour
+
+Try these requests during an active session:
+
+- "Make my breaks 10 seconds shorter" → future rest times decrease, with a minimum.
+- "I'm exhausted" → remaining work becomes gentler and the coach offers a break.
+- "This is too easy" → a small, bounded increase.
+- "Add another set of squats" → a new squat interval appears after recovery.
+- "Help me track 10 more jumping jacks" → a rep-target stage is added; once it starts, the large progress bar shows reps remaining and advances after ten detected reps.
+- "How am I doing?" → spoken progress summary.
+- Every third rest break → a brief spoken check-in about how you're feeling.
+
+## 4. Test and prepare for the review
 
 ```bash
 node --test tests/*.test.mjs
 ```
 
-Review `ENGINEERING_NOTES.md` to prepare for a Hiya code walkthrough and `ai.md` to accurately disclose AI assistance.
+Read `ENGINEERING_NOTES.md` and `ai.md` to explain **where AI is used**, how model responses are translated to **validated workout actions**, the privacy choices, and what hasn't been tested. Capture an optional 2–3 minute demonstration video for Hiya.
 
-**Current verification:** automated logic and UI reference checks passed in GitHub Actions. The applicant previously confirmed the underlying revised pose counter works on their device, but **the new guided HIIT flow and conversational speech handling need live browser testing**. Do not claim they are validated until you try them.
+**Phone testing note:** camera/mic typically require a secure origin. Localhost on your laptop works; a phone connecting to your laptop's plain HTTP LAN IP may not. Use HTTPS for genuine cross-device testing, with a secured backend. The provided local server is not production-ready.
 
-## Priority if something breaks
-
-1. Ensure you're on the **feature branch** and hard-refresh with **Ctrl + Shift + R**.
-2. If the camera view is live but reps don't count, check **Pose tracking ready**, **ACTIVE** session status, and the knee/arms diagnostic below the video.
-3. If voice recognition fails, use Chrome, allow microphone permissions, and use the text coach as fallback.
-4. If a timer skips an interval or a request behaves unexpectedly, capture the exact command and visible stage/timer status for debugging.
-5. Record a 2–3 minute optional screen demo as insurance before submitting.
-
-This is an educational prototype, not exercise-related medical advice or a validated form-correction system.
+**Manual verification still necessary:** Github Actions tests do not check a real Gemini account, real microphone, neural audio playback or full webcam workout accuracy.
