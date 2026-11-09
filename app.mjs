@@ -592,15 +592,26 @@ function stopCamera() {
   $('poseMessage').textContent = 'Camera off — manual reps still work.';
 }
 function renderHistory() {
-  $('totalSessions').textContent = history.length;
-  $('weeklySessions').textContent = weeklySummary(history).sessions;
-  $('totalReps').textContent = history.filter(h => h.exercise !== 'plank').reduce((acc,h)=>acc+Number(h.completed),0);
-  $('totalMinutes').textContent = Math.round(history.reduce((acc,h)=>acc+Number(h.duration||0),0)/60);
+  $('totalSessions').textContent = history.length+hiitHistory.length;
+  $('weeklySessions').textContent = weeklySummary(history).sessions+hiitHistory.filter(h=>Date.parse(h.at)>=Date.now()-7*86400000).length;
+  $('totalReps').textContent = history.filter(h => h.exercise !== 'plank').reduce((acc,h)=>acc+Number(h.completed),0)+hiitHistory.reduce((acc,h)=>acc+(Number(h.reps)||0),0);
+  $('totalMinutes').textContent = Math.round((history.reduce((acc,h)=>acc+Number(h.duration||0),0)+hiitHistory.reduce((acc,h)=>acc+(Number(h.activeSeconds)||0),0))/60);
   const container=$('historyList');container.replaceChildren();
-  if (!history.length) {
+  if (!history.length && !hiitHistory.length) {
     const empty=document.createElement('div');empty.className='empty-history';empty.textContent='No workouts yet. Your first completed session will appear here.';container.append(empty);return;
   }
-  for(const session of [...history].reverse()) {
+  const combined=[...history.map(h=>({kind:'single',...h})),...hiitHistory.map(h=>({kind:'hiit',...h}))].sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
+  for(const session of combined) {
+    if(session.kind==='hiit') {
+      const item=document.createElement('div');item.className='history-item';
+      const info=document.createElement('div'),name=document.createElement('strong'),detail=document.createElement('small');
+      name.textContent='Guided HIIT circuit';
+      detail.textContent=`${new Date(session.at).toLocaleString()} · ${session.intensity} · ${session.stagesCompleted}/${session.totalStages} intervals · ${formatClock(session.activeSeconds)} active`;
+      info.append(name,detail);
+      const score=document.createElement('div');score.className='score';score.textContent=`${session.reps} reps`;
+      item.append(info,score);container.append(item);
+      continue;
+    }
     const item=document.createElement('div'); item.className='history-item';
     const info=document.createElement('div'); const name=document.createElement('strong');name.textContent=EXERCISES[session.exercise].name;
     const detail=document.createElement('small');
@@ -619,6 +630,34 @@ function showTab(which) {
   if (which === 'history') renderHistory();
 }
 function init() {
+  state.profile=loadProfile();
+  if(state.profile) {
+    $('profileGoal').value=state.profile.goal;
+    $('profileLevel').value=state.profile.level;
+    $('profileIntensity').value=state.profile.intensity;
+    $('profileMinutes').value=String(state.profile.minutes);
+    $('profileWeight').value=state.profile.weightKg??'';
+    createPlan();
+  } else {
+    $('welcomePanel').classList.remove('hidden');
+    $('planPanel').classList.add('hidden');
+    setCoach('Welcome to WELP. Build your first HIIT circuit above to get started.');
+  }
+  $('profileForm').addEventListener('submit',e=>{
+    e.preventDefault();
+    state.profile=cleanProfile({
+      goal:$('profileGoal').value,level:$('profileLevel').value,
+      intensity:$('profileIntensity').value,minutes:Number($('profileMinutes').value),
+      weightKg:$('profileWeight').value
+    });
+    saveProfile(state.profile);createPlan();
+    setCoach('Circuit ready. Enable your camera and mic, then say start workout or press Start guided HIIT.');
+  });
+  $('editProfileBtn').addEventListener('click',()=>{
+    if(state.mode!=='ready'||state.hiit?.status==='active'||state.hiit?.status==='paused')return;
+    $('welcomePanel').classList.remove('hidden');$('planPanel').classList.add('hidden');
+  });
+  $('startCircuitBtn').addEventListener('click',startCircuit);
   $('date').textContent = new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric'}).format(new Date());
   document.querySelectorAll('[data-tab]').forEach(el=>el.addEventListener('click',()=>showTab(el.dataset.tab)));
   $('cameraBtn').addEventListener('click',enableCamera);
@@ -633,7 +672,7 @@ function init() {
   $('effort').addEventListener('input',e=>$('effortValue').textContent=`${e.target.value}/10`);
   $('clearHistory').addEventListener('click',()=>{
     if (!confirm('Delete all WELP workout history stored in this browser?')) return;
-    history=[]; saveHistory();
+    history=[];hiitHistory=[];saveHistory();saveHiitHistory();
     try { localStorage.removeItem(LEGACY_HISTORY_KEY); } catch {}
     renderHistory(); if(state.mode==='ready')updateSuggestion();
   });
