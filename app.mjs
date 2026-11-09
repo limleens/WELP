@@ -418,7 +418,7 @@ function finishSession() {
   if (state.mode === 'ready') { speak('Start a session first.'); return; }
   const seconds = Math.round(elapsedSec());
   const complete = state.exercise === 'plank' ? Math.min(seconds, 3600) : state.count;
-  const log = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: new Date().toISOString(), exercise: state.exercise, completed: complete, target: state.target, exertion: Number($('effort').value), duration: seconds };
+  const log = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, at: new Date().toISOString(), exercise: state.exercise, completed: complete, target: state.target, exertion: state.reportedEffort, duration: seconds };
   history.push(log);
   saveHistory();
   state.startedAt = null;
