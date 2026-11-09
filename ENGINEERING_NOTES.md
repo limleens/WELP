@@ -99,3 +99,54 @@ After live user feedback reported that squats and jumping jacks were not being c
 - Added regression tests for rapid movements, posture diagnostics, and missing landmarks; GitHub Actions passed after this iteration.
 
 **Not yet proven:** recognition accuracy on the user's webcam. The new heuristics can still miss movements or overcount. Capture real observations and tune thresholds before claiming reliable counting. For squats, test side-on with hips/knees/ankles in view; for jacks, face camera and keep wrists/ankles in view. Ensure a session is ACTIVE, not READY/PAUSED. If the diagnostic reports no landmarks or never transitions between ready/loaded, inspect pose overlay and model readiness.
+
+## Guided HIIT and natural-language coaching iteration — 9 November 2026
+
+**Why this iteration?** WELP's original single-exercise tracker counted reps, but did not deliver a complete voice-driven workout. This version introduces a user journey and a more meaningful coaching loop, while preserving the pose tracker that the applicant confirmed working.
+
+### What happens end-to-end
+1. The user enters a goal, experience level, preferred intensity, requested session length (5/8/12-minute option), and optionally their weight for a rough energy estimate.
+2. `buildHiitPlan` creates a roughly duration-matched 3-exercise round sequence of **timed work and recovery intervals** using squats, jacks, and timed planks. The number of rounds varies. Previous HIIT session completion/effort can reduce future work intervals.
+3. `HiitSession` owns work/rest interval timing, statuses `ready / active / paused / complete`, next-stage changes, skipped stages, and inserted recovery breaks. It is pure JavaScript and can be tested without a browser.
+4. Existing MediaPipe landmarks + `RepCounter` continue to count **reps within active squat/jack intervals**. HIIT progression itself is time-based, so the user doesn't have to hit a specific rep count to advance.
+5. `parseCoachRequest` recognizes multiple conversational phrasings and context-sensitive yes/no answers. The browser TTS announces new exercises, ten-second warnings, and rest periods; the speech-to-text microphone offers hands-free control.
+6. If body landmarks have recently been detected but no reps occur for approximately 14 seconds, WELP can ask whether the user needs a break. This is an inactivity observation, **not a fatigue diagnosis**.
+7. If the user requests a break, `HiitSession.takeBreak` inserts a recovery interval while preserving the unfinished work interval. If the user says the workout is too hard, `makeEasier` reduces future work durations and extends rest.
+8. After completing or ending early, WELP persists active/rest time, rep count, number of intervals completed and self-reported effort, so another plan can respond to recent difficulty. User profile and history stay in browser `localStorage`.
+
+### Why not use an LLM for all coaching?
+We intentionally used a bounded natural-language **intent parser**, not a remotely hosted open-ended chatbot. More expressions are recognized ("I'm exhausted," "can I catch my breath?", "what's next?", "repeat instructions," "how am I doing?"), but the only changes allowed are explicit controller actions. This prevents arbitrary exercise prescriptions, removes API-key/setup barriers, supports reproducible tests and keeps voice actions explainable.
+
+If asked **"where is the AI?"**: the pretrained **MediaPipe ML pose model** performs on-device vision inference; browser speech recognition performs speech-to-text; the coaching orchestration uses programmed logic (not an LLM). The innovation is integrating live speech, vision, timing and personal adaptation into one hands-free user flow. Do not market the planner as ML-trained or claim generative conversational intelligence.
+
+### Browser privacy and safety
+- Browser recognition may be implemented remotely by the browser vendor; camera pose tracking runs locally.
+- Optional weight is used **only for a rough MET active-energy estimate**; it does not determine difficulty. A fixed calorie-burn goal was deliberately excluded from the MVP.
+- Heights, birth dates, health information and real-world location are not collected.
+- Plank form isn't verified; camera tracking may fail; users can use the text coach, pause, manual reps and skip.
+- Full exercise-specific form demonstrations, multiweek periodization and validated performance analysis remain future features.
+
+### Updated live demonstration
+1. First-time onboarding: select beginner, moderate, cardio, 5 minutes; create a plan.
+2. Show generated exercise/rest schedule and explain why there are multiple rounds.
+3. Allow webcam and microphone access. Say **"start workout"**, do a few jumping jacks, ask **"how am I doing?"**.
+4. Ask **"what's next?"**, **"give me a break"**, and **"can we make it easier?"**; show timer and schedule adapting without clicks.
+5. Finish a short circuit / use **"finish workout"**. Show saved HIIT history, active time and previous-session adaptation when generating the next plan.
+6. Show tests: `node --test tests/*.test.mjs`.
+
+### Questions likely from an engineer
+- **How do transitions happen reliably?** `HiitSession.tick` uses elapsed wall-clock deltas, caps unusual long gaps (e.g. background tabs), emits stage transition events, and keeps pause/resume separate from workout progress.
+- **How does a contextual "yes" work?** A short `pendingVoice='break'` context means "yes" agrees to the most recent break offer; no unrelated changes are made.
+- **How does WELP avoid over-prescribing intensity?** Session changes are bounded (gentler work intervals / longer rests), determined by validated actions. Fitness isn't inferred from weight or camera motion alone.
+- **Why no cloud LLM?** Reliability, latency, simplicity, cost, and the requirement that the submission run without credentials. A future LLM could be a constrained intent translator, not the owner of the session state.
+
+### Verification still needed
+- [ ] First-time onboarding and profile editing in Chrome.
+- [ ] Real voice input (permission/restarts while TTS is speaking).
+- [ ] At least one live multi-interval work/rest transition.
+- [ ] Squat/jack counts preserved across timed transitions.
+- [ ] Inactivity check-in after prolonged no movement while body detected.
+- [ ] Confirm pause, extra break, skip, gentle adaptation, early finish, and history persistence.
+- [ ] No misleading calorie claims, and optional weight only.
+
+The pure HIIT logic is unit-tested in `tests/hiit.test.mjs` and runs alongside the original pose-engine tests in CI. Those tests **do not** establish end-to-end browser functionality or accuracy on actual people.
