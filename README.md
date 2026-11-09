@@ -37,7 +37,7 @@ Open **http://localhost:8000** in Chrome. Do **not** open `index.html` as a `fil
 
 - **Frontend:** vanilla HTML/CSS/JavaScript ES modules; deliberately dependency-light for the short deadline.
 - **Computer vision:** Google MediaPipe Pose Landmarker Lite, loaded from jsDelivr / Google storage, processed on-device in the browser.
-- **Rep counting:** custom hysteresis rule on knee angle (squats) or wrist/ankle landmarks (jacks); short hold duration guards against noisy landmarks. Not a form assessment.
+- **Rep counting:** custom state machine on visible-leg knee angle + hip depth (squats) or wrist/ankle landmarks with a calibrated resting stance (jacks); two consistent samples and complete movement cycles reduce double counting. Not a form assessment.
 - **Voice:** browser Web Speech API for speech recognition/synthesis. Voice support varies by browser, and recognition in Chrome may use a cloud service.
 - **Planning:** deterministic rule using completion ratio and self-reported perceived effort; no medical claims or unvalidated fatigue inference.
 - **Storage:** `localStorage` in the browser; no server required, no user accounts.
@@ -85,3 +85,13 @@ node --test tests/engine.test.mjs
 MediaPipe Pose Landmarker is provided by Google. Read its documentation and license before redistribution: https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/web_js
 
 Web Speech browser support: https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition
+
+## Troubleshooting rep tracking (November 9 update)
+1. Open Chrome at `http://localhost:8000`, enable camera, and ensure the status says **Pose tracking ready** (not just Loading pose model).
+2. Select the right exercise, then press **Start session**; reps do not count while the app is READY or PAUSED.
+3. For squats, stand side-on far enough away for hips, knees, and ankles to be visible. The camera footer shows **knee angle**, **hip depth**, and state-machine **cycle**; check that the position changes from **up** to **down** and back.
+4. For jumping jacks, face the camera with both ankles and wrists visible. Start with arms down and feet together; watch the **arms** and **feet ratio** diagnostics, then do a complete open–closed movement.
+5. If diagnostics stay at **landmarks unclear**, show more of your body and improve lighting. If positions change correctly but count remains zero, report the displayed **cycle** text. If the camera status says **Model unavailable**, inspect the browser console and internet access.
+6. Refresh using **Ctrl+Shift+R** after updating the branch to avoid old browser-cached JavaScript.
+
+These are exploratory heuristics, not verified accuracy claims. Real webcam validation is still required.
