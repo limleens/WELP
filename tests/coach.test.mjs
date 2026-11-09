@@ -7,6 +7,8 @@ test('natural requests create meaningful bounded workout actions',()=>{
   assert.deepEqual(fallbackCoachReply('please help me track 10 more jumping jacks').action,'track_reps');
   const x=validateCoachResponse(fallbackCoachReply('track 10 more jumping jacks'));
   assert.equal(x.exercise,'jack');assert.equal(x.reps,10);
+  const spoken=validateCoachResponse(fallbackCoachReply('please track ten more jumping jacks'));
+  assert.equal(spoken.action,'track_reps');assert.equal(spoken.reps,10);
   assert.equal(validateCoachResponse(fallbackCoachReply('add another set of squats')).action,'add_interval');
   assert.equal(validateCoachResponse(fallbackCoachReply('can we shorten the break by 20 seconds?')).action,'shorten_rest');
   assert.equal(validateCoachResponse(fallbackCoachReply('can I have a longer break?')).action,'extend_rest');
