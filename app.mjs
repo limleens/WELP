@@ -283,6 +283,8 @@ function speak(text) {
   setCoach(text);
   if(state.suppressVoice) return;
   const token=++state.speechToken;
+  if(state.speechWatchdog)clearTimeout(state.speechWatchdog);
+  state.speechWatchdog=null;
   if(state.cloudAudio) {state.cloudAudio.pause();state.cloudAudio=null;}
   try {window.speechSynthesis?.cancel();} catch {}
   if(!('speechSynthesis' in window))return;
@@ -290,8 +292,10 @@ function speak(text) {
   try {state.recognition?.stop();} catch {}
   const done=()=>{
     if(token!==state.speechToken)return;
+    if(state.speechWatchdog)clearTimeout(state.speechWatchdog);
+    state.speechWatchdog=null;
     state.speaking=false;
-    if(state.listening)setTimeout(startSpeechRecognition,250);
+    if(state.listening)scheduleSpeechRestart(90);
   };
   const deviceVoice=()=>{
     if(token!==state.speechToken)return;
@@ -305,14 +309,22 @@ function speak(text) {
     utterance.lang=preferred?.lang||'en-GB';
     utterance.rate=1.03;utterance.pitch=1;
     utterance.onend=done;utterance.onerror=done;
-    try {window.speechSynthesis.speak(utterance);}catch{done();}
+    try {
+      window.speechSynthesis.speak(utterance);
+      // Chromium occasionally misses the completion event after suspended playback.
+      state.speechWatchdog=setTimeout(()=>{
+        if(token!==state.speechToken)return;
+        try{window.speechSynthesis.cancel();}catch{}
+        done();
+      },Math.min(8500,2500+text.length*55));
+    }catch{done();}
   };
   if(!state.ttsEnabled) {deviceVoice();return;}
   (async()=>{
     try {
       const response=await fetch('/api/tts',{method:'POST',
         headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),
-        signal:AbortSignal.timeout(8000)});
+        signal:AbortSignal.timeout(2000)});
       if(!response.ok)throw Error('Natural voice unavailable');
       const audioBlob=await response.blob();
       if(token!==state.speechToken)return;
@@ -684,55 +696,117 @@ async function processSmartVoice(text) {
   performCoachAction(output);
 }
 
+/** Browser ASR is not a persistent microphone transport. This restart manager
+ * shortens gaps and never presents a stale "Listening" status during TTS.
+ */
+function scheduleSpeechRestart(delay=120) {
+  if(state.recognitionRestart)clearTimeout(state.recognitionRestart);
+  if(!state.listening || state.speaking || !state.recognition)return;
+  state.recognitionRestart=setTimeout(()=>{
+    state.recognitionRestart=null;
+    startSpeechRecognition();
+  },delay);
+}
 function startSpeechRecognition() {
-  if (!state.listening || state.speaking || !state.recognition) return;
-  try { state.recognition.start(); } catch { /* already started, or browser ending previous turn */ }
+  if(!state.listening || state.speaking || !state.recognition ||
+     state.recognitionStarting || state.recognitionActive)return;
+  state.recognitionStarting=true;
+  try {
+    state.recognition.start();
+    // Some browser versions reject start() without emitting an event.
+    setTimeout(()=>{
+      if(state.recognitionStarting && !state.recognitionActive){
+        state.recognitionStarting=false;
+        scheduleSpeechRestart(450);
+      }
+    },1500);
+  }catch{
+    state.recognitionStarting=false;
+    scheduleSpeechRestart(350);
+  }
 }
 function stopMicrophone() {
-  state.listening = false;
-  if (state.recognitionRestart) clearTimeout(state.recognitionRestart);
-  state.recognitionRestart = null;
-  try { state.recognition?.stop(); } catch {}
-  try { window.speechSynthesis?.cancel(); } catch {}
-  state.speaking = false;
+  state.listening=false;
+  if(state.recognitionRestart)clearTimeout(state.recognitionRestart);
+  state.recognitionRestart=null;
+  state.recognitionStarting=false;
+  state.recognitionActive=false;
+  state.speechToken++;
+  if(state.speechWatchdog)clearTimeout(state.speechWatchdog);
+  state.speechWatchdog=null;
+  try{state.recognition?.abort();}catch{}
+  try{window.speechSynthesis?.cancel();}catch{}
+  state.cloudAudio?.pause();state.cloudAudio=null;
+  state.speaking=false;
   $('micBtn').classList.remove('listening');
-  $('voiceStatus').textContent = '● Voice off';
+  $('voiceStatus').textContent='● Voice off';
   $('voiceStatus').classList.remove('live');
   $('focusMicBtn').textContent='🎙 Enable mic';
 }
 function toggleMicrophone() {
-  if (state.listening) { stopMicrophone(); setCoach('Voice commands off. You can still use the buttons.'); return; }
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Recognition) { setCoach('Speech recognition is unavailable in this browser. Try Chrome, or use the workout buttons.'); return; }
-  if (!state.recognition) {
-    const rec = new Recognition();
-    rec.lang = 'en-GB';
-    rec.interimResults = false;
-    rec.continuous = false;
-    rec.maxAlternatives = 1;
-    rec.onresult = event => {
-      const result = event.results[event.resultIndex]?.[0]?.transcript;
-      if (result && state.listening) onVoice(result);
-    };
-    rec.onerror = event => {
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        stopMicrophone(); setCoach('Microphone permission was denied. Use the on-screen controls instead.');
-      } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        setCoach(`Speech recognition issue: ${event.error}. You can still use the buttons.`);
+  if(state.listening){
+    stopMicrophone();setCoach('Voice commands off. You can still use the buttons.');return;
+  }
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){
+    setCoach('Speech recognition is unavailable. Try Chrome or type your request.');return;
+  }
+  if(!state.recognition){
+    const rec=new Recognition();
+    rec.lang='en-GB';
+    rec.interimResults=true;
+    rec.continuous=true;
+    rec.maxAlternatives=1;
+    rec.onstart=()=>{
+      state.recognitionStarting=false;
+      state.recognitionActive=true;
+      if(state.listening && !state.speaking){
+        $('voiceStatus').textContent='● Listening now';
+        $('focusMicBtn').textContent='🎙 Listening';
+        $('voiceStatus').classList.add('live');
       }
     };
-    rec.onend = () => {
-      if (state.listening && !state.speaking) state.recognitionRestart = setTimeout(startSpeechRecognition, 650);
+    rec.onresult=event=>{
+      if(!state.listening || state.speaking)return;
+      for(let i=event.resultIndex;i<event.results.length;i++){
+        const item=event.results[i];
+        const result=item?.[0]?.transcript?.trim();
+        if(!result)continue;
+        if(item.isFinal){
+          $('heardText').textContent='You said: “'+result+'”';
+          onVoice(result);
+        } else if(!state.pendingCoachRequest){
+          $('heardText').textContent='Hearing: “'+result+'…”';
+        }
+      }
     };
-    state.recognition = rec;
+    rec.onerror=event=>{
+      state.recognitionStarting=false;
+      if(['not-allowed','service-not-allowed','audio-capture'].includes(event.error)){
+        stopMicrophone();
+        setCoach('Microphone permission or audio capture failed. Use the text coach fallback.');
+      } else if(event.error!=='no-speech'&&event.error!=='aborted'){
+        $('voiceStatus').textContent='◌ Reconnecting microphone…';
+        console.warn('[WELP voice] recognition error:',event.error);
+      }
+    };
+    rec.onend=()=>{
+      state.recognitionActive=false;
+      state.recognitionStarting=false;
+      if(state.listening){
+        $('voiceStatus').textContent=state.speaking?'◌ Coach speaking':'◌ Reconnecting mic…';
+        if(!state.speaking)scheduleSpeechRestart(120);
+      }
+    };
+    state.recognition=rec;
   }
-  state.listening = true;
+  state.listening=true;
   $('micBtn').classList.add('listening');
-  $('voiceStatus').textContent = '● Listening for commands';
+  $('voiceStatus').textContent='◌ Connecting mic…';
   $('voiceStatus').classList.add('live');
-  $('focusMicBtn').textContent='🎙 Listening';
+  $('focusMicBtn').textContent='🎙 Connecting';
   startSpeechRecognition();
-  setCoach('I’m listening. Say “start workout” to begin, or “help” for commands.');
+  setCoach('Voice ready. Tell me when to start.');
 }
 
 function drawPose(points) {
