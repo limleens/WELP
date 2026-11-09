@@ -1,4 +1,5 @@
 import { EXERCISES, RepCounter, parseVoiceCommand, suggestTarget, weeklySummary } from './engine.mjs';
+import { cleanProfile, buildHiitPlan, estimateKcal, HiitSession, parseCoachRequest, HIIT_EXERCISES } from './hiit.mjs';
 
 const $ = id => document.getElementById(id);
 const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -6,8 +7,11 @@ const mpCdn = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision';
 const HISTORY_KEY = 'welp-history-v1';
 const LEGACY_HISTORY_KEY = 'pacepal-history-v1';
 const HISTORY_MAX = 150;
+const PROFILE_KEY = 'welp-profile-v1';
+const HIIT_HISTORY_KEY = 'welp-hiit-history-v1';
 
 let history = loadHistory();
+let hiitHistory = loadHiitHistory();
 const repCounter = new RepCounter('squat');
 const state = {
   exercise: 'squat', target: EXERCISES.squat.base,
@@ -15,6 +19,9 @@ const state = {
   cameraStream: null, landmarker: null, raf: null, lastFrameAt: 0, lastVideoTime: -1, modelLoading: false,
   recognition: null, listening: false, speaking: false, recognitionRestart: null,
   reachAnnounced: false,
+  profile: null, hiit: null, hiitPlan: null, hiitReps: 0, hiitSegments: [],
+  lastRepAt: 0, lastBodyAt: 0, idlePrompted: false, pendingVoice: null,
+  lastCountdownCue: false,
 };
 
 function loadHistory() {
@@ -22,6 +29,168 @@ function loadHistory() {
     const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || localStorage.getItem(LEGACY_HISTORY_KEY) || '[]');
     return Array.isArray(parsed) ? parsed.filter(x => x && EXERCISES[x.exercise] && Number.isFinite(Number(x.completed))) : [];
   } catch { return []; }
+}
+function loadHiitHistory() {
+  try {
+    const data=JSON.parse(localStorage.getItem(HIIT_HISTORY_KEY)||'[]');
+    return Array.isArray(data)?data.filter(x=>x && Number.isFinite(Number(x.activeSeconds))):[];
+  } catch {return [];}
+}
+function saveHiitHistory() {
+  try {localStorage.setItem(HIIT_HISTORY_KEY,JSON.stringify(hiitHistory.slice(-HISTORY_MAX)));}
+  catch {setCoach('Unable to save this workout in local browser storage.');}
+}
+function loadProfile() {
+  try {const raw=localStorage.getItem(PROFILE_KEY);return raw?cleanProfile(JSON.parse(raw)):null;}
+  catch{return null;}
+}
+function saveProfile(profile) {
+  try {localStorage.setItem(PROFILE_KEY,JSON.stringify(profile));}
+  catch{setCoach('Preferences could not be saved in this browser.');}
+}
+function renderPlan() {
+  if(!state.hiitPlan) return;
+  const plan=state.hiitPlan;
+  const work=plan.stages.filter(s=>s.kind==='work');
+  const rounded=Math.round(plan.totalSeconds/60);
+  $('planTitle').textContent=`${rounded}-minute ${plan.profile.intensity} HIIT circuit`;
+  $('planReason').textContent=plan.rationale;
+  const steps=$('planSteps');steps.replaceChildren();
+  // Summarize one exercise round instead of creating dozens of repeating cards.
+  for(const step of plan.stages.slice(0,5)) {
+    const card=document.createElement('div');card.className='plan-step';
+    const name=document.createElement('span');name.textContent=step.kind==='rest'?'Recovery':HIIT_EXERCISES[step.exercise].name;
+    const duration=document.createElement('small');duration.textContent=`${step.seconds} seconds`;
+    card.append(name,duration);steps.append(card);
+  }
+  const more=plan.stages.length-5;
+  if(more>0) {const tail=document.createElement('div');tail.className='plan-step';tail.textContent=`+ ${more} more intervals`;steps.append(tail);}
+  $('sessionResult').classList.add('hidden');
+  $('planPanel').classList.remove('hidden');
+  $('welcomePanel').classList.add('hidden');
+  renderHiitClock();
+}
+function createPlan() {
+  state.hiitPlan=buildHiitPlan(state.profile,history);
+  state.hiit=new HiitSession(state.hiitPlan);
+  state.hiitReps=0;
+  state.hiitSegments=[];
+  state.mode='ready';
+  state.exercise=state.hiit.stage.exercise || 'squat';
+  repCounter.reset(state.exercise);
+  state.count=0;state.seconds=0;state.elapsedBeforePause=0;state.startedAt=null;
+  state.reachAnnounced=false;
+  $('exerciseSelect').value=state.exercise;
+  renderPlan();
+  updateProgress();
+}
+function renderHiitClock() {
+  const session=state.hiit;
+  if(!session)return;
+  const stage=session.stage;
+  $('stageName').textContent=session.status==='complete'?'Circuit complete!':stage?.kind==='rest'?'Recovery break':(HIIT_EXERCISES[stage?.exercise]?.name||'Ready to begin');
+  $('stageRemaining').textContent=formatClock(Math.ceil(session.remaining));
+  $('circuitProgress').textContent=`Step ${Math.min(session.index+1,session.stages.length)} / ${session.stages.length}`;
+  $('startCircuitBtn').textContent=session.status==='ready'?'▶ Start guided HIIT':session.status==='paused'?'▶ Resume circuit':session.status==='active'?'Ⅱ Pause circuit':'↻ New circuit';
+  $('startCircuitBtn').disabled=false;
+  $('editProfileBtn').disabled=session.status==='active'||session.status==='paused';
+  const planNodes=$('planSteps').children;
+  for(let i=0;i<planNodes.length;i++)planNodes[i].classList.toggle('is-active',i===session.index && i<5);
+}
+function describeStage(stage) {
+  if(stage.kind==='rest'){
+    const upcoming=state.hiit?.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
+    return `Take ${Math.ceil(state.hiit.remaining)} seconds to breathe. ${upcoming?'Up next: '+HIIT_EXERCISES[upcoming.exercise].name+'.':''}`;
+  }
+  return `${HIIT_EXERCISES[stage.exercise].name} for ${Math.ceil(state.hiit.remaining)} seconds. ${HIIT_EXERCISES[stage.exercise].cue}`;
+}
+function startCircuit() {
+  if(!state.hiit){setCoach('First, choose your workout preferences.');return;}
+  if(state.hiit.status==='complete')createPlan();
+  if(state.hiit.status==='active'){pauseSession();return;}
+  const wasPaused=state.hiit.status==='paused';
+  state.hiit.start(Date.now());
+  state.mode='active';
+  state.startedAt=Date.now();
+  if(wasPaused)repCounter.suspend();
+  state.lastRepAt=Date.now();
+  state.idlePrompted=false;
+  speak(wasPaused?'Circuit resumed. Keep going!':`Let's begin! ${describeStage(state.hiit.stage)}`);
+  updateProgress();renderHiitClock();
+}
+function recordCurrentWork() {
+  if(!state.hiit || state.hiit.stage?.kind!=='work')return;
+  const stage=state.hiit.stage;
+  state.hiitReps+=state.exercise==='plank'?0:state.count;
+  state.hiitSegments.push({exercise:stage.exercise,reps:state.count,plannedSeconds:stage.seconds});
+}
+function onStageChanged(previous) {
+  if(previous?.kind==='work') {
+    // Preserve completed reps before moving on to a recovery stage.
+    state.hiitReps+=previous.exercise==='plank'?0:state.count;
+    state.hiitSegments.push({exercise:previous.exercise,reps:state.count,plannedSeconds:previous.seconds});
+  }
+  const stage=state.hiit.stage;
+  if(!stage) return;
+  if(stage.kind==='work') {
+    state.exercise=stage.exercise;
+    $('exerciseSelect').value=stage.exercise;
+    repCounter.reset(stage.exercise);
+  } else repCounter.suspend();
+  state.count=0;state.seconds=0;state.lastRepAt=Date.now();
+  state.idlePrompted=false;state.lastCountdownCue=false;state.pendingVoice=null;
+  speak(describeStage(stage));
+  updateProgress();renderHiitClock();
+}
+function endCircuit(reason='finished',previous=state.hiit?.stage) {
+  if(!state.hiit) return;
+  if(previous?.kind==='work')recordCurrentWork();
+  const ses=state.hiit;
+  if(ses.status!=='complete') {ses.pause(Date.now());ses.status='complete';}
+  state.mode='ready';state.startedAt=null;state.elapsedBeforePause=0;
+  const result={at:new Date().toISOString(),goal:state.profile.goal,
+    intensity:state.profile.intensity,activeSeconds:Math.round(ses.activeSeconds),
+    restSeconds:Math.round(ses.restSeconds),reps:state.hiitReps,
+    stagesCompleted:ses.completedStages,totalStages:ses.stages.length,
+    exertion:Number($('effort').value),segments:state.hiitSegments};
+  hiitHistory.push(result);saveHiitHistory();
+  const calories=estimateKcal(state.profile.weightKg,result.activeSeconds,state.profile.intensity);
+  const summary=`Circuit ${reason}! ${result.reps} recorded reps across ${result.stagesCompleted} intervals. Active time ${formatClock(result.activeSeconds)}.${calories===null?'':' Rough estimated active energy '+calories+' kilocalories.'}`;
+  $('sessionResult').textContent=summary+(calories===null?'':' Calorie estimate is approximate, not measured.');
+  $('sessionResult').classList.remove('hidden');
+  renderHiitClock();renderHistory();updateProgress();
+  speak(summary+' Great job listening to your body.');
+}
+function tickCircuit() {
+  const s=state.hiit;
+  if(!s || s.status!=='active')return;
+  const prior={...s.stage};
+  const events=s.tick(Date.now());
+  for(const e of events) {
+    if(e.type==='stage')onStageChanged(prior);
+    if(e.type==='completed'){endCircuit('complete',prior);return;}
+  }
+  if(s.status!=='active')return;
+  if(s.stage.kind==='work' && !state.lastCountdownCue && s.remaining<=10){
+    state.lastCountdownCue=true;
+    speak('Ten seconds to go!');
+  }
+  if(s.stage.kind==='work' && state.exercise!=='plank' && !state.idlePrompted &&
+     Date.now()-state.lastRepAt>14000 && Date.now()-state.lastBodyAt<2000){
+    state.idlePrompted=true;state.pendingVoice='break';
+    speak('Need a breather? You can say yes, or keep going.');
+  }
+  renderHiitClock();
+}
+function takeCircuitBreak() {
+  if(!state.hiit || !['active','paused'].includes(state.hiit.status))return;
+  const prior={...state.hiit.stage};
+  state.hiit.takeBreak(Date.now(),25);
+  if(prior.kind==='work') {
+    // Work not completed; preserve counts for summary, then resume remaining time after rest.
+    onStageChanged(prior);
+  } else {speak('Added more recovery time.');renderHiitClock();}
+  state.pendingVoice=null;
 }
 function saveHistory() {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_MAX))); }
