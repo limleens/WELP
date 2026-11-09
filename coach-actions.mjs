@@ -68,7 +68,8 @@ export function fallbackCoachReply(transcript,ctx={}) {
     return {action:'easier',reply:"Got you. I'll dial it back and give you longer breaks."};
   if(/\b(finish|end|stop)\b/.test(t) && /\b(workout|session|circuit)\b/.test(t))
     return {action:'finish',reply:"Okay, let's wrap up your session."};
-  if(/^(pause|stop|hold on|wait)$/i.test(t.trim())) return {action:'pause',reply:"Pausing for you."};
+  if(/^(?:please\s+)?(?:pause|hold on|wait|stop)(?:\s+(?:the|my|this|workout|session|for|a|sec|second|moment))*$/i.test(t.trim()))
+    return {action:'pause',reply:"Pausing for you."};
   if(/\b(resume|continue|keep going)\b/.test(t))return {action:'resume',reply:"All right, let's keep moving."};
   if(/\b(start|let's go|begin|ready)\b/.test(t))return {action:'start',reply:"Let's do this!"};
   if(/\b(skip|move on|next exercise)\b/.test(t))return {action:'skip',reply:"Okay, moving on."};
