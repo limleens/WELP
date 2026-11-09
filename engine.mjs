@@ -19,94 +19,148 @@ export function angleDegrees(a, b, c) {
   return Math.acos(cosine) * 180 / Math.PI;
 }
 
-const visible = (point) => point && (point.visibility ?? 1) >= 0.55;
+// These thresholds are heuristic starting points; the UI displays the raw values so
+// they can be tuned against real webcam observations without guessing.
+const visible = (p, min = .40) => p && Number.isFinite(p.x) && Number.isFinite(p.y) && (p.visibility ?? 1) >= min;
+const distance = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
 
-export function squatSignal(points) {
-  // MediaPipe landmarks: hip=23/24, knee=25/26, ankle=27/28.
+/** Select the usable leg instead of taking the minimum angle from both legs:
+ *  the far-side leg is often occluded and creates unrealistic angles. */
+export function squatMetrics(points) {
   if (!points || points.length < 29) return null;
-  const sides = [
-    [23, 25, 27], [24, 26, 28]
-  ];
-  const angles = sides.map(([hip, knee, ankle]) => {
-    if (![points[hip], points[knee], points[ankle]].every(visible)) return null;
-    return angleDegrees(points[hip], points[knee], points[ankle]);
-  }).filter(v => v !== null);
-  if (!angles.length) return null;
-  return Math.min(...angles); // Favor the more visible bent side in side-facing poses.
+  const sides = [[23,25,27,'left'],[24,26,28,'right']];
+  const candidates = [];
+  for (const [hi,ki,ai,side] of sides) {
+    const [hip,knee,ankle] = [points[hi],points[ki],points[ai]];
+    if (![hip,knee,ankle].every(p=>visible(p))) continue;
+    const thigh=distance(hip,knee), shin=distance(knee,ankle);
+    if (thigh < .045 || shin < .045) continue;
+    const angle=angleDegrees(hip,knee,ankle);
+    const height=ankle.y-hip.y;
+    const depth=Math.abs(height)>.09 ? (knee.y-hip.y)/height : null;
+    candidates.push({angle,depth,side,confidence:Math.min(hip.visibility??1,knee.visibility??1,ankle.visibility??1),
+      score:Math.min(hip.visibility??1,knee.visibility??1,ankle.visibility??1)*(thigh+shin)});
+  }
+  candidates.sort((x,y)=>y.score-x.score);
+  return candidates[0] ?? null;
 }
-
-export function jackSignal(points) {
-  // wrists=15/16, shoulders=11/12, ankles=27/28
-  if (!points || [11,12,15,16,27,28].some(i => !visible(points[i]))) return null;
-  const leftS = points[11], rightS = points[12], leftW = points[15], rightW = points[16];
-  const leftA = points[27], rightA = points[28];
-  const shoulderWidth = Math.abs(leftS.x - rightS.x);
-  if (shoulderWidth < 0.045) return null; // Insufficient frontal view.
-  const ankleWidth = Math.abs(leftA.x - rightA.x);
-  const armsHigh = leftW.y < leftS.y - 0.08 && rightW.y < rightS.y - 0.08;
-  const armsLow = leftW.y > leftS.y + 0.13 && rightW.y > rightS.y + 0.13;
-  const legsWide = ankleWidth > shoulderWidth * 1.55;
-  const legsClose = ankleWidth < shoulderWidth * 1.25;
-  if (armsHigh && legsWide) return 'open';
-  if (armsLow && legsClose) return 'closed';
+export function squatSignal(points) {
+  return squatMetrics(points)?.angle ?? null;
+}
+export function jackMetrics(points) {
+  if (!points || [11,12,15,16,27,28].some(i=>!visible(points[i],.35))) return null;
+  const [leftS,rightS,leftW,rightW,leftA,rightA]=[11,12,15,16,27,28].map(i=>points[i]);
+  const shoulderWidth=distance(leftS,rightS);
+  // Front-facing jacks are unreliable when shoulders collapse into one column.
+  if (shoulderWidth < .065) return null;
+  const feetRatio=Math.abs(leftA.x-rightA.x)/shoulderWidth;
+  const armsHigh=leftW.y < leftS.y-.045 && rightW.y < rightS.y-.045;
+  const armsLow=leftW.y > leftS.y+.04 && rightW.y > rightS.y+.04;
+  return {feetRatio,armsHigh,armsLow};
+}
+/** Without a calibrated resting stance, allow a generous starting posture.
+ *  Once resting ankle separation is seen, use a personalised relative spread. */
+export function jackSignal(points, restingFeetRatio = null) {
+  const m=jackMetrics(points);
+  if (!m) return null;
+  const spread = restingFeetRatio === null
+    ? m.feetRatio >= 1.65
+    : m.feetRatio >= Math.max(restingFeetRatio*1.28,restingFeetRatio+.33);
+  const together = restingFeetRatio === null
+    ? m.feetRatio <= 1.8
+    : m.feetRatio <= Math.max(restingFeetRatio*1.22,restingFeetRatio+.16);
+  if (m.armsHigh && spread) return 'open';
+  if (m.armsLow && together) return 'closed';
   return 'transition';
 }
-
-/**
- * Hysteresis-style exercise counter. Signals must remain stable for 140ms,
- * reducing double-counts from landmark jitter. One full cycle -> one rep.
- */
-export class RepCounter {
-  constructor(exercise = 'squat') { this.reset(exercise); }
-  reset(exercise = this.exercise) {
-    this.exercise = exercise;
-    this.phase = 'start';
-    this.candidate = null;
-    this.candidateSince = 0;
-    this.lastRepAt = -Infinity;
-    this.reps = 0;
+export function inspectMovement(points, exercise, restingFeetRatio = null) {
+  if (exercise === 'squat') {
+    const m=squatMetrics(points);
+    if (!m) return {position:null, detail:'Leg landmarks unclear. Move back so hips, knees and ankles are visible.'};
+    // Knee angle is useful from the side; hip-to-knee vertical ratio helps
+    // in frontal views where a knee may not visibly bend very much in 2D.
+    const down=m.angle<=140 || (m.depth!==null && m.depth<=.31);
+    const up=m.angle>=155 && (m.depth===null || m.depth>=.38);
+    const position=down?'down':up?'up':'transition';
+    const detail=`Knee ${Math.round(m.angle)}° · hip depth ${m.depth===null?'n/a':m.depth.toFixed(2)} · ${position}`;
+    return {position, detail, angle:m.angle, depth:m.depth};
   }
-  update(points, nowMs) {
-    if (this.exercise === 'plank') return { reps: this.reps, signal: null, counted: false };
-    const raw = this.exercise === 'squat' ? squatSignal(points) : jackSignal(points);
-    const desired = this.exercise === 'squat'
-      ? (raw === null ? null : raw < 112 ? 'down' : raw > 155 ? 'up' : 'transition')
-      : raw;
-    if (!desired || desired === 'transition') {
-      this.candidate = null;
-      return { reps: this.reps, signal: raw, counted: false };
+  if (exercise === 'jack') {
+    const m=jackMetrics(points);
+    if (!m) return {position:null, detail:'Keep shoulders, both wrists and ankles in frame; face the camera.'};
+    const position=jackSignal(points,restingFeetRatio);
+    return {position, detail:`Arms ${m.armsHigh?'up':m.armsLow?'down':'moving'} · feet ${m.feetRatio.toFixed(2)}× shoulder width · ${position}`,
+      feetRatio:m.feetRatio,armsLow:m.armsLow};
+  }
+  return {position:null,detail:'Timed exercise'};
+}
+
+/** Two consistent posture readings trigger a state transition (rather than
+ * holding one posture for 140ms, which missed fast jumping jacks at ~8fps).
+ * A complete movement cycle is required to count a rep. */
+export class RepCounter {
+  constructor(exercise='squat') { this.reset(exercise); }
+  reset(exercise=this.exercise) {
+    this.exercise=exercise;
+    this.phase='start';
+    this.candidate=null;
+    this.candidateSince=0;
+    this.candidateFrames=0;
+    this.lastRepAt=-Infinity;
+    this.reps=0;
+    this.restingFeetRatio=null;
+  }
+  update(points,nowMs) {
+    if(this.exercise==='plank') return {reps:this.reps,counted:false,position:null,detail:'Timed exercise',phase:this.phase};
+    const m=inspectMovement(points,this.exercise,this.restingFeetRatio);
+    if (this.exercise==='jack' && this.restingFeetRatio===null && m.armsLow &&
+      Number.isFinite(m.feetRatio) && m.feetRatio<=2.6) {
+      this.restingFeetRatio=m.feetRatio;
     }
-    if (desired !== this.candidate) {
-      this.candidate = desired;
-      this.candidateSince = nowMs;
-      return { reps: this.reps, signal: raw, counted: false };
+    // Re-evaluate with the freshly calibrated resting stance.
+    const reading=this.exercise==='jack' && this.restingFeetRatio!==null
+      ?inspectMovement(points,this.exercise,this.restingFeetRatio):m;
+    const desired=reading.position;
+    if (!desired || desired==='transition') {
+      this.candidate=null;
+      this.candidateFrames=0;
+      return {reps:this.reps,counted:false,phase:this.phase,...reading};
     }
-    if (nowMs - this.candidateSince < 140) return { reps: this.reps, signal: raw, counted: false };
-    let counted = false;
-    const first = this.exercise === 'squat' ? 'down' : 'open';
-    const second = this.exercise === 'squat' ? 'up' : 'closed';
-    if (this.phase === 'start') {
-      if (desired === second) this.phase = 'ready';
-      else if (desired === first) this.phase = 'loaded';
-    } else if (this.phase === 'ready' && desired === first) {
-      this.phase = 'loaded';
-    } else if (this.phase === 'loaded' && desired === second) {
-      this.phase = 'ready';
-      if (nowMs - this.lastRepAt >= 650) {
-        this.reps += 1;
-        this.lastRepAt = nowMs;
-        counted = true;
+    if(desired!==this.candidate) {
+      this.candidate=desired;
+      this.candidateSince=nowMs;
+      this.candidateFrames=1;
+      return {reps:this.reps,counted:false,phase:this.phase,...reading};
+    }
+    this.candidateFrames+=1;
+    if(this.candidateFrames<2 || nowMs-this.candidateSince<30)
+      return {reps:this.reps,counted:false,phase:this.phase,...reading};
+    const first=this.exercise==='squat'?'down':'open';
+    const second=this.exercise==='squat'?'up':'closed';
+    let counted=false;
+    if(this.phase==='start') {
+      if(desired===second) this.phase='ready';
+      else if(desired===first) this.phase='loaded';
+    } else if(this.phase==='ready' && desired===first) {
+      this.phase='loaded';
+    } else if(this.phase==='loaded' && desired===second) {
+      this.phase='ready';
+      if(nowMs-this.lastRepAt>=450) {
+        this.reps+=1;
+        this.lastRepAt=nowMs;
+        counted=true;
       }
     }
-    return { reps: this.reps, signal: raw, counted };
+    return {reps:this.reps,counted,phase:this.phase,...reading};
   }
   suspend() {
-    this.phase = 'start';
-    this.candidate = null;
-    this.candidateSince = 0;
+    this.phase='start';
+    this.candidate=null;
+    this.candidateSince=0;
+    this.candidateFrames=0;
   }
   adjust(delta) {
-    this.reps = Math.max(0, this.reps + delta);
+    this.reps=Math.max(0,this.reps+delta);
     this.suspend();
     return this.reps;
   }
