@@ -35,7 +35,12 @@ export function fallbackCoachReply(transcript,ctx={}) {
   const t=String(transcript).toLowerCase().replace(/[’]/g,"'");
   const e=mapExercise(t);
   const count=(t.match(/\b(\d{1,2})\s*(?:more\s*)?(?:reps?|jumping jacks?|squats?)\b/)||[])[1];
-  const reps=count?between(Number(count),3,40):10;
+  const names={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,
+    eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,
+    eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40};
+  const word=(t.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty)\s*(?:more\s*)?(?:reps?|jumping jacks?|squats?)\b/)||[])[1];
+  const requestedReps=count?Number(count):names[word];
+  const reps=Number.isFinite(requestedReps)?between(requestedReps,3,40):10;
   const sec=(t.match(/\b(\d{1,2})\s*(?:more\s*)?(?:seconds?|secs?)\b/)||[])[1];
   const seconds=sec?between(Number(sec),5,60):15;
   const pending=ctx.pending;
@@ -48,7 +53,7 @@ export function fallbackCoachReply(transcript,ctx={}) {
   if(pending==='break' && /^(yes|yeah|sure|please|okay|ok)\b/.test(t))
     return {action:'take_break',reply:'Sure. Take a moment to catch your breath.'};
   if(/\b(add|another|extra|more)\b/.test(t) && e && /\b(interval|set|round|exercise|squats?|jacks?)\b/.test(t))
-    return {action:count?'track_reps':'add_interval',exercise:e,reps,reply:count?`Got it, adding ${reps} ${e==='jack'?'jumping jacks':'squats'} to your circuit.`:'Sure, I added another exercise interval.'};
+    return {action:count||word?'track_reps':'add_interval',exercise:e,reps,reply:count||word?`Got it, adding ${reps} ${e==='jack'?'jumping jacks':'squats'} to your circuit.`:'Sure, I added another exercise interval.'};
   if(/\b(track|count|do)\b/.test(t) && e && count)
     return {action:'track_reps',exercise:e,reps,reply:`Absolutely, let's do ${reps} ${e==='jack'?'jumping jacks':'squats'}.`};
   if(/\b(shorter|shorten|reduce|less)\b/.test(t) && /\b(breaks?|rests?)\b/.test(t))
