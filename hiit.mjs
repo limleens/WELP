@@ -136,6 +136,20 @@ export class HiitSession {
     }
     this.remaining=this.stage.kind==='work'?Math.max(8,Math.round(this.remaining*.8)):this.remaining+5;
   }
+  makeHarder() {
+    if(!['active','paused','ready'].includes(this.status))return false;
+    for(let i=this.index;i<this.stages.length;i++) {
+      const stage=this.stages[i];
+      if(stage.kind==='work' && !stage.targetReps) {
+        stage.seconds=clamp(stage.seconds+5,10,60);
+        if(i===this.index)this.remaining=Math.min(60,this.remaining+5);
+      } else if(stage.kind==='rest') {
+        stage.seconds=clamp(stage.seconds-5,8,120);
+        if(i===this.index)this.remaining=Math.max(8,this.remaining-5);
+      }
+    }
+    return true;
+  }
   adjustRests(deltaSeconds) {
     if(!['ready','active','paused'].includes(this.status))return false;
     const delta=clamp(Math.round(Number(deltaSeconds)||0),-60,60);
