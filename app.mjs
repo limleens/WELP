@@ -276,23 +276,73 @@ function setCoach(text, heard = null) {
   $('coachMessage').textContent = text;
   if (heard !== null) $('heardText').textContent = heard;
 }
+/** The UI always has a text transcript; speech is the primary control surface. */
 function speak(text) {
   setCoach(text);
-  if (!('speechSynthesis' in window)) return;
-  state.speaking = true;
-  try { state.recognition?.stop(); } catch { /* may already be stopped */ }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.08;
-  utterance.pitch = 1.05;
-  const done = () => {
-    state.speaking = false;
-    if (state.listening) setTimeout(startSpeechRecognition, 450);
+  if(state.suppressVoice) return;
+  const token=++state.speechToken;
+  if(state.cloudAudio) {state.cloudAudio.pause();state.cloudAudio=null;}
+  try {window.speechSynthesis?.cancel();} catch {}
+  if(!('speechSynthesis' in window))return;
+  state.speaking=true;
+  try {state.recognition?.stop();} catch {}
+  const done=()=>{
+    if(token!==state.speechToken)return;
+    state.speaking=false;
+    if(state.listening)setTimeout(startSpeechRecognition,250);
   };
-  utterance.onend = done;
-  utterance.onerror = done;
-  window.speechSynthesis.speak(utterance);
+  const deviceVoice=()=>{
+    if(token!==state.speechToken)return;
+    const utterance=new SpeechSynthesisUtterance(text);
+    const voices=window.speechSynthesis.getVoices?.()||[];
+    const english=voices.filter(v=>v.lang.toLowerCase().startsWith('en'));
+    const preferred=english.find(v=>/natural|neural|online|premium|enhanced/i.test(v.name))
+      ||english.find(v=>/aria|jenny|samantha|daniel|google uk/i.test(v.name))
+      ||english[0];
+    if(preferred)utterance.voice=preferred;
+    utterance.lang=preferred?.lang||'en-GB';
+    utterance.rate=1.03;utterance.pitch=1;
+    utterance.onend=done;utterance.onerror=done;
+    try {window.speechSynthesis.speak(utterance);}catch{done();}
+  };
+  if(!state.ttsEnabled) {deviceVoice();return;}
+  (async()=>{
+    try {
+      const response=await fetch('/api/tts',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),
+        signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw Error('Natural voice unavailable');
+      const audioBlob=await response.blob();
+      if(token!==state.speechToken)return;
+      const url=URL.createObjectURL(audioBlob);
+      const audio=new Audio(url);
+      state.cloudAudio=audio;
+      audio.onended=()=>{URL.revokeObjectURL(url);state.cloudAudio=null;done();};
+      audio.onerror=()=>{URL.revokeObjectURL(url);state.cloudAudio=null;deviceVoice();};
+      await audio.play();
+    }catch{
+      if(token===state.speechToken)deviceVoice();
+    }
+  })();
 }
+async function detectCloudCoach() {
+  try {
+    const response=await fetch('/api/status',{signal:AbortSignal.timeout(2000)});
+    if(!response.ok)throw Error('No local AI backend');
+    const config=await response.json();
+    state.cloudAvailable=!!config.geminiEnabled;
+    state.ttsAvailable=!!config.ttsEnabled;
+    $('cloudCoachToggle').disabled=!state.cloudAvailable;
+    $('neuralVoiceToggle').disabled=true;
+    $('aiStatus').textContent=state.cloudAvailable
+      ?'Gemini is available · switch on to send requests with limited workout context'
+      :'Local voice coach · run node server.mjs with GEMINI_API_KEY for Gemini';
+  } catch {
+    state.cloudAvailable=false;state.ttsAvailable=false;
+    $('aiStatus').textContent='Local coach · Gemini requires the optional Node server';
+  }
+}
+
 function updateProgress() {
   const amount = state.exercise === 'plank' ? state.seconds : state.count;
   $('completed').textContent = amount;
