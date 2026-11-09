@@ -43,7 +43,7 @@
 <section id="planPanel" class="plan-panel hidden" aria-live="polite">
  <div class="plan-header"><div><div class="eyebrow muted">YOUR HIIT CIRCUIT</div><h2 id="planTitle">A workout just for you</h2><p id="planReason">Plan built from your choices.</p></div><div class="plan-actions"><button id="editProfileBtn" class="button secondary">Edit preferences</button><button id="startCircuitBtn" class="button primary">▶ Start guided HIIT</button></div></div>
  <div id="planSteps" class="plan-steps"></div>
- <div class="plan-live"><strong id="stageName">Ready to begin</strong><span id="stageRemaining">--:--</span><span id="circuitProgress">Step 0 / 0</span></div>
+ <div class="plan-live"><strong id="stageName">Ready to begin</strong><span id="stageRemaining">--:--</span><span id="circuitProgress">Step 0 / 0</span><span id="liveEnergy" title="Optional rough estimate, not measured calories"></span></div>
  <p id="sessionResult" class="session-result hidden"></p>
  <small class="muted">Work intervals are timed. Squats and jumping jacks are counted when pose tracking works; plank is timed only. Each circuit includes spoken instructions and rest breaks.</small>
 </section>
@@ -72,7 +72,7 @@
         </div>
       </div>
       <section class="coach-card">
-        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach WELP</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “start workout” · “I need a break” · “what’s next?” · “make it easier”</div></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
+        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach WELP</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “start workout” · “I need a break” · “what’s next?” · “make it easier”</div><form id="coachTextForm" class="coach-text-form"><input id="coachTextInput" aria-label="Type a workout request" placeholder="Try a request if your microphone is unavailable…" autocomplete="off"/><button type="submit">Ask coach</button></form></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
       </section>
       <div class="bottom-note"><span>✦ Built for bodyweight exercises at home</span><span>Movement counting is experimental; always stop if you're uncomfortable.</span></div>
     </section>
