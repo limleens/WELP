@@ -127,3 +127,7 @@ Google model availability and TTS quality must be confirmed with a real key and 
 - [ ] AI usage disclosure and one-page write-up describe only verified behaviour.
 
 **Honesty note:** The CI test suite verifies pure logic, mocked API calls, local server routes and DOM references—not a fully validated end-to-end browser or fitness system.
+
+
+## Voice latency and microphone feedback iteration
+The applicant reported missed spoken commands and model replies arriving after exercise transitions. WELP now uses an instant local fast path for unambiguous commands and limits network waits for less familiar conversation. It restarts browser recognition more aggressively, shows current recognition state, and produces short automatic coaching cues. See **VOICE_PERFORMANCE.md** for a failure analysis, architectural alternatives (Gemini Live, LiveKit Agents, Pipecat), validation instructions, and interview discussion. Full-duplex interruption is still a known limitation.
