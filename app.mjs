@@ -1,6 +1,7 @@
 import { EXERCISES, RepCounter, parseVoiceCommand, suggestTarget, weeklySummary } from './engine.mjs';
 import { cleanProfile, buildHiitPlan, estimateKcal, HiitSession, parseCoachRequest, HIIT_EXERCISES } from './hiit.mjs';
 import {validateCoachResponse, fallbackCoachReply} from './coach-actions.mjs';
+import {fastCoachDecision, shortStageCue, conciseCoachReply} from './voice-fastpath.mjs';
 
 const $ = id => document.getElementById(id);
 const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -26,6 +27,7 @@ const state = {
   reportedEffort:6, restCount:0, speechToken:0, cloudAudio:null,
   cloudEnabled:false, cloudAvailable:false, ttsAvailable:false, ttsEnabled:false,
   suppressVoice:false, pendingCoachRequest:false, coachTurns:[], lastMilestone:-1,
+  recognitionActive:false, recognitionStarting:false, recognitionRetry:0, speechWatchdog:null,
 };
 
 function loadHistory() {
@@ -158,13 +160,8 @@ function renderQueue() {
   }
 }
 function describeStage(stage) {
-  if(stage.kind==='rest'){
-    const upcoming=state.hiit?.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
-    return `Take ${Math.ceil(state.hiit.remaining)} seconds to breathe. ${upcoming?'Up next: '+HIIT_EXERCISES[upcoming.exercise].name+'.':''}`;
-  }
-  return stage.targetReps
-    ? `Let's do ${stage.targetReps} ${HIIT_EXERCISES[stage.exercise].name.toLowerCase()}. ${HIIT_EXERCISES[stage.exercise].cue}`
-    : `${HIIT_EXERCISES[stage.exercise].name} for ${Math.ceil(state.hiit.remaining)} seconds. ${HIIT_EXERCISES[stage.exercise].cue}`;
+  const next=state.hiit?.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
+  return shortStageCue(stage.kind==='rest'?{...stage,seconds:Math.ceil(state.hiit?.remaining??stage.seconds)}:stage,next);
 }
 function startCircuit() {
   if(!state.hiit){setCoach('First, choose your workout preferences.');return;}
@@ -208,7 +205,7 @@ function onStageChanged(previous) {
   if(stage.kind==='rest')state.restCount++;
   if(stage.kind==='rest' && state.restCount%3===0){
     state.pendingVoice='feeling';
-    speak("Nice work. Here's a breather. How's the pace feeling: comfortable, or a little too much?");
+    speak('Nice one. How are you feeling: good, or a bit tired?');
   } else speak(describeStage(stage));
   updateProgress();renderQueue();renderHiitClock();
 }
@@ -251,7 +248,7 @@ function tickCircuit() {
   if(s.stage.kind==='work' && state.exercise!=='plank' && !state.idlePrompted &&
      Date.now()-state.lastRepAt>14000 && Date.now()-state.lastBodyAt<2000){
     state.idlePrompted=true;state.pendingVoice='break';
-    speak('Need a breather? You can say yes, or keep going.');
+    speak('Want a break? Say yes, or keep going.');
   }
   renderHiitClock();
 }
@@ -512,7 +509,7 @@ function maybeAnnounceReps() {
     const remain=target-state.count;
     if(remain>0 && remain<=3 && state.lastMilestone!==remain) {
       state.lastMilestone=remain;
-      speak(remain===1?'One more!':remain===2?'Two to go!':'Three left. You can do this!');
+      speak(remain===1?'One more!':remain===2?'Two to go!':'Three to go!');
     }
     if(state.count>=target)advanceRepStage();
   }
@@ -632,7 +629,7 @@ function performCoachAction(raw) {
     }
   } finally {state.suppressVoice=false;}
   renderQueue();renderHiitClock();updateProgress();
-  speak(response);
+  speak(conciseCoachReply(response));
 }
 async function processSmartVoice(text) {
   if(state.pendingCoachRequest){
@@ -645,18 +642,27 @@ async function processSmartVoice(text) {
   // Emergency symptoms are handled immediately, even if Gemini is slow or unavailable.
   const immediate=validateCoachResponse(fallbackCoachReply(text,context));
   if(immediate.action==='safety'){performCoachAction(immediate);return;}
+  const quick=fastCoachDecision(text,context);
+  if(quick){
+    state.coachTurns.push({role:'user',text:text.slice(0,220)},{role:'coach',text:quick.reply});
+    state.coachTurns=state.coachTurns.slice(-6);
+    performCoachAction(quick);
+    return;
+  }
   let output;
   state.pendingCoachRequest=true;
   try {
     if(state.cloudEnabled) {
       $('aiStatus').textContent='Gemini is thinking…';
+      const started=performance.now();
       const response=await fetch('/api/coach',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({transcript:text,context}),
-        signal:AbortSignal.timeout(11000)
+        signal:AbortSignal.timeout(2600)
       });
       if(!response.ok)throw Error('Cloud request unavailable');
       output=validateCoachResponse(await response.json());
+      console.debug('[WELP voice] Gemini response',Math.round(performance.now()-started),'ms');
     } else output=validateCoachResponse(fallbackCoachReply(text,context));
   }catch {
     output=validateCoachResponse(fallbackCoachReply(text,context));
