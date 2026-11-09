@@ -642,6 +642,9 @@ async function processSmartVoice(text) {
   const ses=state.hiit;
   const index=ses.index;
   const context=getCoachContext();
+  // Emergency symptoms are handled immediately, even if Gemini is slow or unavailable.
+  const immediate=validateCoachResponse(fallbackCoachReply(text,context));
+  if(immediate.action==='safety'){performCoachAction(immediate);return;}
   let output;
   state.pendingCoachRequest=true;
   try {
