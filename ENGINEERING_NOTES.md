@@ -25,7 +25,7 @@ There is no server, account, custom-trained pose classifier, or LLM inference in
 - `one-page-writeup.md`: assignment write-up draft.
 
 ## Rep counting algorithm
-MediaPipe estimates pose landmarks, **not repetitions**. Squat counts use the angle hip–knee–ankle; <112 degrees is down, >155 degrees is up. Jumping jacks compare wrist height with shoulders and ankle separation against shoulder width. The counter accepts a movement state after it remains stable for 140ms, requires a complete movement cycle, and limits counts to at most one per 650ms. Pause or lost camera tracking clears an incomplete movement so it cannot create a phantom rep on resumption. Users may manually add or undo reps. Plank mode is only a timer; form is not checked.
+MediaPipe estimates pose landmarks, **not repetitions**. Squat counts now use the more confidently visible leg and the angle hip–knee–ankle, plus a normalized hip-depth cue: <=140° or sufficiently lowered depth indicates down; >=155° plus an upright depth indicates up. Jumping jacks compare wrist height with shoulders and ankle separation against shoulder width. The counter accepts a movement state after two consistent pose samples (at least 30ms apart), requires a complete movement cycle, and limits counts to at most one per 450ms. Pause or lost camera tracking clears an incomplete movement so it cannot create a phantom rep on resumption. Users may manually add or undo reps. Plank mode is only a timer; form is not checked.
 
 These fixed thresholds were chosen for a demonstration and are not validated across different body types, cameras, lighting, or exercise techniques.
 
@@ -87,3 +87,15 @@ Local automated logic tests: **11 passed** with Node 22 when changes were prepar
 - [ ] Record optional demo video.
 
 Disclose AI coding tools and verify every claim yourself before presenting.
+
+## Tracking reliability iteration — 9 November 2026
+After live user feedback reported that squats and jumping jacks were not being counted, we investigated two sources of false negatives: overly strict fixed thresholds and a low-frequency (120ms) pose sampling loop combined with an additional 140ms hold. Changes:
+- Increased target pose sampling frequency to approximately every 55ms, subject to actual browser/model performance.
+- Use the more confidently visible leg for squat angle rather than the minimum of both legs; permit a more natural squat angle and use a secondary normalized depth cue.
+- Introduce standing-position calibration for jumping-jack ankle separation and more tolerant arm-height thresholds.
+- Count only after two consistent samples and a complete down/up or open/closed cycle, rather than a 140ms posture hold.
+- Show debug readings in the camera footer: knee angle/depth or arm/foot state, plus the state-machine phase (ready/loaded).
+- Separate a visible camera image from a *ready pose model* in the camera status.
+- Added regression tests for rapid movements, posture diagnostics, and missing landmarks; GitHub Actions passed after this iteration.
+
+**Not yet proven:** recognition accuracy on the user's webcam. The new heuristics can still miss movements or overcount. Capture real observations and tune thresholds before claiming reliable counting. For squats, test side-on with hips/knees/ankles in view; for jacks, face camera and keep wrists/ankles in view. Ensure a session is ACTIVE, not READY/PAUSED. If the diagnostic reports no landmarks or never transitions between ready/loaded, inspect pose overlay and model readiness.
