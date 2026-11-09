@@ -17,5 +17,6 @@ jobs:
           node --check hiit.mjs
           node --check coach-actions.mjs
           node --check server.mjs
+          node --check voice-fastpath.mjs
       - name: Run workout engine tests
         run: node --test tests/*.test.mjs
