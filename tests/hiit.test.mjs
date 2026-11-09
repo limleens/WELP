@@ -88,3 +88,38 @@ test('spoken request variants map to bounded session actions',()=>{
   assert.equal(parseCoachRequest('how many calories have I burned?').action,'calories');
   assert.equal(parseCoachRequest('can we do a different exercise?').action,'skip');
 });
+
+test('custom rep-target set is inserted after recovery, not on top of current work',()=>{
+  const session=new HiitSession({profile,stages:[
+    {kind:'work',exercise:'squat',seconds:30},
+    {kind:'rest',seconds:20},
+    {kind:'work',exercise:'jack',seconds:30}
+  ]});
+  session.start(0);
+  assert.equal(session.addExercise('jack',{targetReps:10}),true);
+  assert.equal(session.stages[2].exercise,'jack');
+  assert.equal(session.stages[2].targetReps,10);
+  assert.equal(session.stages[3].kind,'rest');
+});
+test('rest durations can be shortened or extended but not below safe minimum',()=>{
+  const session=new HiitSession({profile,stages:[
+    {kind:'work',exercise:'squat',seconds:25},
+    {kind:'rest',seconds:30},
+    {kind:'work',exercise:'jack',seconds:25}
+  ]});
+  session.start(0);
+  assert.equal(session.adjustRests(-100),true);
+  assert.equal(session.stages[1].seconds,8);
+  assert.equal(session.adjustRests(15),true);
+  assert.equal(session.stages[1].seconds,23);
+});
+test('harder request increases bounded work and reduces rest',()=>{
+  const session=new HiitSession({profile,stages:[
+    {kind:'work',exercise:'squat',seconds:30},
+    {kind:'rest',seconds:20}
+  ]});
+  session.start(0);
+  session.makeHarder();
+  assert.equal(session.remaining,35);
+  assert.equal(session.stages[1].seconds,15);
+});
