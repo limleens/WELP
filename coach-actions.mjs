@@ -51,11 +51,11 @@ export function fallbackCoachReply(transcript,ctx={}) {
     return {action:count?'track_reps':'add_interval',exercise:e,reps,reply:count?`Got it, adding ${reps} ${e==='jack'?'jumping jacks':'squats'} to your circuit.`:'Sure, I added another exercise interval.'};
   if(/\b(track|count|do)\b/.test(t) && e && count)
     return {action:'track_reps',exercise:e,reps,reply:`Absolutely, let's do ${reps} ${e==='jack'?'jumping jacks':'squats'}.`};
-  if(/\b(shorter|shorten|reduce|less)\b/.test(t) && /\b(break|rest)\b/.test(t))
+  if(/\b(shorter|shorten|reduce|less)\b/.test(t) && /\b(breaks?|rests?)\b/.test(t))
     return {action:'shorten_rest',seconds,reply:`Okay, I'll shorten your rest by ${seconds} seconds.`};
-  if(/\b(longer|extend|increase|more)\b/.test(t) && /\b(break|rest)\b/.test(t))
+  if(/\b(longer|extend|increase|more)\b/.test(t) && /\b(breaks?|rests?)\b/.test(t))
     return {action:'extend_rest',seconds,reply:`No problem, I'll add ${seconds} seconds of recovery.`};
-  if(/\b(need|want|take|give me)\b/.test(t) && /\b(break|rest|breather)\b/.test(t))
+  if(/\b(need|want|take|give me)\b/.test(t) && /\b(breaks?|rests?|breather)\b/.test(t))
     return {action:'take_break',reply:"Absolutely. Let's take a breather."};
   if(/\b(too easy|harder|more intense|push me)\b/.test(t))
     return {action:'harder',reply:"You got it. I'll give you a small, controlled challenge."};
