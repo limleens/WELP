@@ -2,91 +2,111 @@
 
 **Hiya Voice AI Challenge 2026** · Track: **Real-Time Assistance**
 
-WELP is a voice-first, camera-assisted **HIIT coach for equipment-free home workouts**. It builds short timed circuits from a user's goal, experience, preferred intensity and duration, then walks them through work/rest intervals. It counts squats and jumping jacks using pose landmarks, listens for natural spoken requests, adapts the session if someone struggles, and saves progress locally.
+**WELP is a voice-first adaptive HIIT coach** for equipment-free workouts at home. It uses a webcam to count reps, a large glanceable timer/rep progress bar, and a voice coach to guide exercises, rest periods, and user-directed adaptations. You can say "add ten jumping jacks", "make breaks shorter", "I'm struggling", "what's next?", and WELP changes its session, not just its spoken answer.
 
-## Run it
+## Quick start (no API key)
 
-Requires Python 3, Chrome or Edge, and an internet connection for MediaPipe assets.
+Requires Node.js 22+ (recommended) or Python 3, and recent Chrome/Edge.
 
 ```bash
 git clone https://github.com/limleens/WELP.git
 cd WELP
 git switch feat/welp-home-workout-helper
-python -m http.server 8000
+node server.mjs
 ```
 
-Open **http://localhost:8000** (not `file://`). The branch is a pull request; after merge, the `git switch` step is no longer needed.
+Open **http://localhost:8000**. WELP runs with **local conversation fallback**, basic browser speech recognition/synthesis, MediaPipe pose tracking, HIIT planning and history. You can also run `python -m http.server 8000` if you only need the static UI; the Gemini options will remain unavailable.
 
-1. **Set your preferences** in the Welcome panel: goal, level, intensity and preferred session length. Body weight is optional **only** for a rough active-energy estimate, not for deciding difficulty.
-2. **Build my HIIT circuit** to generate a timed sequence of squats, jumping jacks, plank holds and recovery intervals. Your plan is saved in browser storage.
-3. **Enable camera**, wait for **Pose tracking ready**, and stand far enough back to show your full body. Side-on for squats, facing forward for jumping jacks.
-4. **Enable voice** with the microphone button if supported. Say **“start workout”** or click **Start guided HIIT**. Spoken guidance also works with the microphone off if browser speech synthesis is available.
-5. Try conversational requests: **“I'm exhausted, can we make it easier?”**, **“I need a break”**, **“what's next?”**, **“how much time is left?”**, **“skip this exercise”**, **“give me more rest”**, **“repeat the instructions”**, or **“finish workout”**.
-6. Each work interval counts down, followed by a recovery break; WELP announces transitions. For a completely hands-free demo, use voice. If speech recognition fails, use the **Ask coach** text input as a fallback.
-7. At the end, view your active time, reps and saved circuit in **My progress**. If you opted into providing weight, a **very rough estimated** active-energy number is displayed.
+## Enable real Gemini conversation (optional)
 
-**Note:** HIIT intervals are **time-based**, not fixed-rep targets. Rep counts are tracked as progress within each timed work interval. Plank is a timer only; the app does **not** verify plank form.
+The prototype includes a **Node.js backend proxy** so no API key is exposed to the browser. Google AI Studio access and model availability depend on your project; rates/costs may apply.
 
-## How it works
+1. Get a key from [Google AI Studio](https://aistudio.google.com/apikey).
+2. Copy `.env.example` to `.env`, paste your key into `GEMINI_API_KEY`, and keep `.env` private (already gitignored).
+3. Run:
+   ```bash
+   node --env-file=.env server.mjs
+   ```
+4. Open localhost, build a workout, and enable **Gemini conversation** in the coach area. This toggle is an explicit opt-in: transcript text and limited workout context are sent to Gemini, **not webcam video or body weight**.
+5. For optional expressive Google neural speech, set `GEMINI_TTS=1` in `.env`, restart and turn on **Expressive AI voice** in the app. This feature may add latency and incur additional cost. Device speech is used automatically if the audio service fails.
+
+**Windows PowerShell**: `Copy-Item .env.example .env` then edit `.env` with VS Code; run the Node command above.
+
+**Security:** Never paste your key into `index.html`, `app.mjs`, a public GitHub issue, or the submission write-up. The server binds to `127.0.0.1` for local development; it is **not a production internet-facing API** (no user authentication or rate limits).
+
+## The voice-first experience
+
+1. Choose workout goal, experience, intensity, length and optional weight (used **only** for a rough active-energy estimate).
+2. Build a timed HIIT circuit of squats, jumping jacks, plank holds and recovery intervals.
+3. Enable camera and microphone, then say **"start workout"**.
+4. The app automatically announces transitions. It checks in about how the workout feels **every third rest break**, and may ask if you want a break when rep activity stops while a body remains visible.
+5. Requests can modify the workout:
+
+   - **"Can you track 10 more jumping jacks?"** — inserts a camera-counted, **10-rep target** interval after the next recovery. The next stage begins once those reps are detected (a time limit also applies).
+   - **"Add another set of squats."** — inserts a 30-second squat interval.
+   - **"Make my breaks 10 seconds shorter."** — reduces remaining rest durations, with an 8-second minimum.
+   - **"I'm exhausted; can we make it easier?"** — shortens remaining work, extends recovery and offers a break.
+   - **"This is too easy."** — makes a small, bounded adjustment to later work/rest.
+   - **"How am I doing?"**, **"What's next?"**, **"How do I do this?"**, **"Pause"**, **"Resume"**, **"Skip this"**, **"Finish workout"** — handled using session context.
+6. WELP saves active time, reps, completed intervals, effort inferred only from **spoken feedback** (not a forced on-screen rating), and recent training results.
+
+The **phone interface** emphasizes a large timer or reps-remaining counter and a progress bar. Small controls remain for permissions, correction and stopping the session. Camera/microphone permissions require **localhost or HTTPS**; simply accessing the laptop's plain HTTP LAN address from a phone will generally not give camera permissions. For a real remote-phone demo, use an HTTPS deployment with an appropriate secured backend.
+
+## Architecture
 
 ```text
-User preferences -> buildHiitPlan -> work/rest schedule
-                                       |
-Webcam -> MediaPipe -> RepCounter ------+-> UI + voice status
-Microphone -> SpeechRecognition -> parseCoachRequest -> allowed session actions
-                                       |
-                               HiitSession state machine
-                                       |
-                               SpeechSynthesis guidance
-                                       |
-                         localStorage profile + workout history
+Webcam -> MediaPipe pose landmarks -> RepCounter ------------------+
+Browser microphone -> SpeechRecognition -> transcript             |
+                                          |                        v
+                              Local intent fallback    Validated action dispatcher
+                                          |                        |
+               [opt-in] Node server /api/coach -> Gemini JSON -----+
+                                                                   |
+                              HiitSession timed/rep intervals <----+
+                                        |                   |
+                                Progress UI                 Spoken response
+                                        |                   |
+                                 localStorage        Browser TTS / optional
+                                                     /api/tts Gemini speech
 ```
 
-- `hiit.mjs`: pure plan generation, time-based session state machine, context-aware natural-language intent parsing and optional MET-based energy estimate.
-- `engine.mjs`: pure 2D pose geometry, squat/jack rep state machine and legacy session logic.
-- `app.mjs`: browser UI, on-device pose inference, microphone recognition, spoken feedback, workout orchestration and storage.
-- `index.html` / `styles.css`: responsive onboarding, live studio, plan overview and progress views.
-- `tests/engine.test.mjs`, `tests/hiit.test.mjs`: deterministic unit tests; GitHub Actions runs all tests.
-- `ENGINEERING_NOTES.md`: trade-offs, architecture and suggested reviewer walkthrough.
-- `ai.md`: required AI-tool disclosure.
-- `one-page-writeup.md`: draft Hiya submission write-up.
+**Session state and safety remain deterministic.** Gemini generates a short natural reply plus one structured action; the controller validates the requested exercise, rep count, duration and session status before applying it. The AI cannot directly rewrite arbitrary workout code or issue unbounded fitness recommendations. If Gemini is absent or unavailable, the app falls back to an expanded local phrase interpreter.
 
-The **voice coach is not a free-form generative LLM**: it recognizes diverse natural-language expressions through a deliberately bounded, context-aware parser and turns them into deterministic, testable session actions. The user's “yes” to a break prompt is interpreted in context. This keeps the demo API-key-free. A future LLM could map utterances to the *same validated action schema*, but would need its own backend and robust testing.
+- `hiit.mjs`: pure HIIT planner, state machine, added rep-target stages and break/workload adjustment.
+- `coach-actions.mjs`: allowlisted AI actions, validation, local intent fallback.
+- `server.mjs`: optional server-side Gemini text and TTS proxy, plus local static serving. No npm packages required.
+- `engine.mjs`: MediaPipe landmark angle/state-machine rep counting.
+- `app.mjs`: browser camera, speech, session events, UI, local storage and coaching integration.
+- `index.html`, `styles.css`: accessible, responsive interface.
+- `tests/`: Node unit tests for movement, planning, voice actions, server and UI references.
+- `ENGINEERING_NOTES.md`, `ai.md`, `one-page-writeup.md`: engineering and submission materials.
 
-## Tests
-
-Requires Node.js 18+:
+## Automated tests
 
 ```bash
+node --check server.mjs
 node --check app.mjs
 node --test tests/*.test.mjs
 ```
 
-The tests cover exercise angles, rep cycles, profile validation, multi-round planning, timed interval transitions, pause/resume, extra breaks, reduced intensity, and conversational intent interpretation.
+GitHub Actions runs these checks for each push and PR. They validate the state engine and mocks for Gemini calls; **they cannot verify real model access, audio quality, camera accuracy, browser microphone permissions, latency or natural speech on a phone**.
 
-**Important:** Unit tests cannot verify real-world microphone or webcam accuracy. Test the complete workflow in your own browser and record actual observations. User feedback indicated the revised movement counter works on their setup; guided HIIT and speech interactions require new live testing.
+## Privacy and limitations
 
-## Safety, privacy and limitations
+- Video frames are processed locally in MediaPipe; WELP does not record or upload them.
+- Browser speech recognition may send audio to the browser vendor. When Gemini is opted in, transcript text and limited session context are sent to Google.
+- No height, health history or medical condition is required; body weight is optional solely for rough MET-based energy estimates.
+- Calorie values are estimates, not physiological measurements or calorie-burn goals.
+- No claim of validated posture correction, injury prevention, fatigue detection, or medically supervised training. Inactivity simply triggers an optional check-in.
+- Keep a manual rep-correction option; camera classification varies with lighting and perspective.
+- This is a locally hosted prototype. If offering it publicly, add server authentication, rate limits, monitoring, HTTPS and key protections.
 
-- Webcam video is processed **locally in the browser**, not uploaded or recorded by WELP. MediaPipe files are downloaded from public hosts.
-- Browser **SpeechRecognition may use a vendor-hosted service**. Do not claim voice audio always stays on-device.
-- Profile and workout records are held in the browser's `localStorage`, not synced across devices; clearing history deletes local results.
-- No fitness level is inferred from body size. Calorie estimates require optional weight and use a crude MET-based approximation for active time only. These are **not measured** or appropriate as calorie-burn targets.
-- No injury diagnosis, validated form correction, physiological fatigue detection, or individualized medical exercise prescription.
-- Inactivity triggers an **optional** check-in only when a body is detected; it is not a diagnosis of exhaustion.
-- Voice recognition can miss utterances, especially with music/breathing; the text fallback and UI buttons remain available.
-- If uncomfortable, stop; if dizzy or experiencing significant symptoms, stop exercising and seek appropriate help.
+**Before submitting:** Run a live multi-interval workout with your own camera and microphone; test one Gemini conversation; test an added 10-rep interval; validate audio behaviour and exercise transitions; record a short demo. Deadline: **Wednesday, 11 November 2026, 11:59pm GMT**.
 
-## Submission checklist
+## Attribution
 
-- [ ] Test a whole circuit using live camera and mic on the target laptop.
-- [ ] Verify work/rest transitions, pause/resume, skip, “make it easier”, and “yes” to a break prompt.
-- [ ] Verify history persists across refresh and a new circuit can be generated.
-- [ ] Personalize `one-page-writeup.md` and `ai.md` to reflect what you actually used and tested.
-- [ ] Record optional 2–3 minute video as insurance.
-- [ ] Submit working prototype, one-page write-up and GitHub repo/ZIP by **11 Nov 2026, 11:59pm GMT**.
+Google MediaPipe Pose Landmarker: https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/web_js
 
-## Reference and attribution
+Browser Speech Recognition: https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition
 
-- MediaPipe Pose Landmarker: https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker/web_js
-- Web Speech API: https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition
+Gemini models and API key security: https://ai.google.dev/gemini-api/docs/
