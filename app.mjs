@@ -280,6 +280,7 @@ function selectExercise(key) {
   setCoach(`${EXERCISES[key].name} selected. ${EXERCISES[key].cue}`);
 }
 function startSession() {
+  if(!state.profile) {setCoach('Choose your preferences and build a HIIT circuit first.');return;}
   if (state.hiit) {startCircuit();return;}
   if (state.mode === 'active') { pauseSession(); return; }
   if (state.mode === 'paused') {
@@ -354,6 +355,7 @@ function changeDifficulty(direction) {
 }
 function onVoice(text) {
   $('heardText').textContent = `You said: “${text}”`;
+  if(!state.profile){speak('First choose your goal, experience and intensity, then build a HIIT circuit.');return;}
   if(state.hiit){onHiitVoice(text);return;}
   const command = parseVoiceCommand(text);
   switch (command.action) {
