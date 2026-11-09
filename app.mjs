@@ -85,6 +85,7 @@ function createPlan() {
   state.count=0;state.seconds=0;state.elapsedBeforePause=0;state.startedAt=null;
   state.reachAnnounced=false;
   $('exerciseSelect').value=state.exercise;
+  $('exerciseCue').textContent=HIIT_EXERCISES[state.exercise].cue;
   renderPlan();
   updateProgress();
 }
@@ -141,8 +142,12 @@ function onStageChanged(previous) {
   if(stage.kind==='work') {
     state.exercise=stage.exercise;
     $('exerciseSelect').value=stage.exercise;
+    $('exerciseCue').textContent=HIIT_EXERCISES[stage.exercise].cue;
     repCounter.reset(stage.exercise);
-  } else repCounter.suspend();
+  } else {
+    $('exerciseCue').textContent='Recovery time. Focus on breathing; the next exercise will begin automatically.';
+    repCounter.suspend();
+  }
   state.count=0;state.seconds=0;state.lastRepAt=Date.now();
   state.idlePrompted=false;state.lastCountdownCue=false;state.pendingVoice=null;
   speak(describeStage(stage));
