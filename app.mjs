@@ -1,5 +1,6 @@
 import { EXERCISES, RepCounter, parseVoiceCommand, suggestTarget, weeklySummary } from './engine.mjs';
 import { cleanProfile, buildHiitPlan, estimateKcal, HiitSession, parseCoachRequest, HIIT_EXERCISES } from './hiit.mjs';
+import {validateCoachResponse, fallbackCoachReply} from './coach-actions.mjs';
 
 const $ = id => document.getElementById(id);
 const modelUrl = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
@@ -22,6 +23,9 @@ const state = {
   profile: null, hiit: null, hiitPlan: null, hiitReps: 0, hiitSegments: [],
   lastRepAt: 0, lastBodyAt: 0, idlePrompted: false, pendingVoice: null,
   lastCountdownCue: false,
+  reportedEffort:6, restCount:0, speechToken:0, cloudAudio:null,
+  cloudEnabled:false, cloudAvailable:false, ttsAvailable:false, ttsEnabled:false,
+  suppressVoice:false, pendingCoachRequest:false, coachTurns:[], lastMilestone:-1,
 };
 
 function loadHistory() {
@@ -78,6 +82,10 @@ function createPlan() {
   state.hiit=new HiitSession(state.hiitPlan);
   state.hiitReps=0;
   state.hiitStruggled=false;
+  state.reportedEffort=6;
+  state.restCount=0;
+  state.lastMilestone=-1;
+  state.coachTurns=[];
   state.hiitSegments=[];
   state.mode='ready';
   state.exercise=state.hiit.stage.exercise || 'squat';
@@ -87,6 +95,7 @@ function createPlan() {
   $('exerciseSelect').value=state.exercise;
   $('exerciseCue').textContent=HIIT_EXERCISES[state.exercise].cue;
   renderPlan();
+  renderQueue();
   updateProgress();
 }
 function renderHiitClock() {
@@ -94,22 +103,63 @@ function renderHiitClock() {
   if(!session)return;
   const stage=session.stage;
   $('stageName').textContent=session.status==='complete'?'Circuit complete!':stage?.kind==='rest'?'Recovery break':(HIIT_EXERCISES[stage?.exercise]?.name||'Ready to begin');
-  $('stageRemaining').textContent=formatClock(Math.ceil(session.remaining));
+  const repTarget=stage?.targetReps;
+  $('stageRemaining').textContent=repTarget?String(Math.max(0,repTarget-state.count))+' reps left':formatClock(Math.ceil(session.remaining));
   $('circuitProgress').textContent=`Step ${Math.min(session.index+1,session.stages.length)} / ${session.stages.length}`;
   const kcal=estimateKcal(state.profile?.weightKg,session.activeSeconds,state.profile?.intensity);
   $('liveEnergy').textContent=kcal===null?'':'~'+kcal+' kcal estimated';
+  renderFocusDisplay();
   $('startCircuitBtn').textContent=session.status==='ready'?'▶ Start guided HIIT':session.status==='paused'?'▶ Resume circuit':session.status==='active'?'Ⅱ Pause circuit':'↻ New circuit';
   $('startCircuitBtn').disabled=false;
   $('editProfileBtn').disabled=session.status==='active'||session.status==='paused';
-  const planNodes=$('planSteps').children;
-  for(let i=0;i<planNodes.length;i++)planNodes[i].classList.toggle('is-active',i===session.index && i<5);
+  // The compact queue is refreshed on stage transitions and edits.
+}
+function renderFocusDisplay() {
+  const ses=state.hiit;
+  if(!ses)return;
+  const stage=ses.stage;
+  const resting=stage?.kind==='rest';
+  const done=ses.status==='complete';
+  $('focusDisplay').classList.toggle('resting',resting);
+  $('focusStage').textContent=done?'Workout complete':resting?'Catch your breath':HIIT_EXERCISES[stage?.exercise]?.name||'Ready for your workout';
+  const target=Number(stage?.targetReps)||0;
+  const repMode=!!target && !resting;
+  $('focusRemaining').textContent=done?'DONE':repMode?String(Math.max(0,target-state.count)):formatClock(Math.ceil(ses.remaining));
+  $('focusMeasure').textContent=done?'GREAT WORK':resting?'REST TIME':repMode?'REPS TO GO':'TIME LEFT';
+  let fraction=done?1:repMode?state.count/target:1-ses.remaining/Math.max(1,stage?.seconds||1);
+  fraction=Math.max(0,Math.min(1,fraction));
+  $('focusFill').style.width=(fraction*100).toFixed(1)+'%';
+  $('focusTrack').setAttribute('aria-valuenow',String(Math.round(fraction*100)));
+  $('focusHint').textContent=done?'You can build another circuit.':resting?'Your coach will tell you what is next':repMode?'Each counted rep moves your bar':'Eyes off the screen — follow the coach';
+  $('focusTotal').textContent=ses.completedStages+' / '+ses.stages.length+' intervals completed';
+}
+function renderQueue() {
+  const s=state.hiit;
+  if(!s)return;
+  const steps=$('planSteps');
+  steps.replaceChildren();
+  const upcoming=s.stages.slice(s.index,s.index+6);
+  for(let i=0;i<upcoming.length;i++) {
+    const stage=upcoming[i],card=document.createElement('div'),name=document.createElement('span'),meta=document.createElement('small');
+    card.className='plan-step'+(i===0?' is-active':'');
+    name.textContent=stage.kind==='rest'?'Rest':HIIT_EXERCISES[stage.exercise]?.name;
+    meta.textContent=stage.targetReps?String(stage.targetReps)+' reps':String(stage.seconds)+' sec';
+    card.append(name,meta);steps.append(card);
+  }
+  if(s.stages.length-s.index>6){
+    const tail=document.createElement('div');tail.className='plan-step';
+    tail.textContent='+'+(s.stages.length-s.index-6)+' intervals';
+    steps.append(tail);
+  }
 }
 function describeStage(stage) {
   if(stage.kind==='rest'){
     const upcoming=state.hiit?.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
     return `Take ${Math.ceil(state.hiit.remaining)} seconds to breathe. ${upcoming?'Up next: '+HIIT_EXERCISES[upcoming.exercise].name+'.':''}`;
   }
-  return `${HIIT_EXERCISES[stage.exercise].name} for ${Math.ceil(state.hiit.remaining)} seconds. ${HIIT_EXERCISES[stage.exercise].cue}`;
+  return stage.targetReps
+    ? `Let's do ${stage.targetReps} ${HIIT_EXERCISES[stage.exercise].name.toLowerCase()}. ${HIIT_EXERCISES[stage.exercise].cue}`
+    : `${HIIT_EXERCISES[stage.exercise].name} for ${Math.ceil(state.hiit.remaining)} seconds. ${HIIT_EXERCISES[stage.exercise].cue}`;
 }
 function startCircuit() {
   if(!state.hiit){setCoach('First, choose your workout preferences.');return;}
@@ -149,9 +199,13 @@ function onStageChanged(previous) {
     repCounter.suspend();
   }
   state.count=0;state.seconds=0;state.lastRepAt=Date.now();
-  state.idlePrompted=false;state.lastCountdownCue=false;state.pendingVoice=null;
-  speak(describeStage(stage));
-  updateProgress();renderHiitClock();
+  state.idlePrompted=false;state.lastCountdownCue=false;state.pendingVoice=null;state.lastMilestone=-1;
+  if(stage.kind==='rest')state.restCount++;
+  if(stage.kind==='rest' && state.restCount%3===0){
+    state.pendingVoice='feeling';
+    speak("Nice work. Here's a breather. How's the pace feeling: comfortable, or a little too much?");
+  } else speak(describeStage(stage));
+  updateProgress();renderQueue();renderHiitClock();
 }
 function endCircuit(reason='finished',previous=state.hiit?.stage) {
   if(!state.hiit) return;
@@ -166,13 +220,13 @@ function endCircuit(reason='finished',previous=state.hiit?.stage) {
     intensity:state.profile.intensity,activeSeconds:Math.round(ses.activeSeconds),
     restSeconds:Math.round(ses.restSeconds),reps:state.hiitReps,
     stagesCompleted:ses.completedStages,totalStages:ses.stages.length,
-    exertion:Math.max(Number($('effort').value),state.hiitStruggled?8:0),segments:state.hiitSegments};
+    exertion:Math.max(state.reportedEffort,state.hiitStruggled?8:0),segments:state.hiitSegments};
   hiitHistory.push(result);saveHiitHistory();
   const calories=estimateKcal(state.profile.weightKg,result.activeSeconds,state.profile.intensity);
   const summary=`Circuit ${reason}! ${result.reps} recorded reps across ${result.stagesCompleted} intervals. Active time ${formatClock(result.activeSeconds)}.${calories===null?'':' Rough estimated active energy '+calories+' kilocalories.'}`;
   $('sessionResult').textContent=summary+(calories===null?'':' Calorie estimate is approximate, not measured.');
   $('sessionResult').classList.remove('hidden');
-  renderHiitClock();renderHistory();updateProgress();
+  renderQueue();renderHiitClock();renderHistory();updateProgress();
   speak(summary+' Great job listening to your body.');
 }
 function tickCircuit() {
@@ -696,7 +750,14 @@ function init() {
     if(!text)return;
     $('coachTextInput').value='';onVoice(text);
   });
-  $('effort').addEventListener('input',e=>$('effortValue').textContent=`${e.target.value}/10`);
+  $('cloudCoachToggle').addEventListener('change',e=>{
+    state.cloudEnabled=state.cloudAvailable && e.target.checked;
+    if(!state.cloudEnabled){state.ttsEnabled=false;$('neuralVoiceToggle').checked=false;}
+    $('neuralVoiceToggle').disabled=!state.cloudEnabled || !state.ttsAvailable;
+    $('aiStatus').textContent=state.cloudEnabled?'Gemini conversation active · workout actions are validated':'Local coach active · no transcript sent to Gemini';
+  });
+  $('neuralVoiceToggle').addEventListener('change',e=>{state.ttsEnabled=state.cloudEnabled&&state.ttsAvailable&&e.target.checked;});
+  detectCloudCoach();
   $('clearHistory').addEventListener('click',()=>{
     if (!confirm('Delete all WELP workout history stored in this browser?')) return;
     history=[];hiitHistory=[];saveHistory();saveHiitHistory();
