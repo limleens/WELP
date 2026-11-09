@@ -147,20 +147,22 @@ export class HiitSession {
 export function parseCoachRequest(transcript='',pending=null) {
   const s=transcript.toLowerCase().replace(/[’]/g,"'").trim();
   if(!s) return {action:'unknown'};
-  if(/\b(dizzy|faint|chest pain|cannot breathe|can't breathe)\b/.test(s)) return {action:'safety'};
+  if(/\b(dizzy|faint|chest pain|cannot breathe|can't breathe|feeling faint)\b/.test(s)) return {action:'safety'};
   if(pending==='break' && /\b(yes|yeah|please|sure|okay|ok|go ahead)\b/.test(s)) return {action:'break'};
   if(pending==='break' && /\b(no|nah|not now|keep going)\b/.test(s)) return {action:'decline'};
   if(/\b(stop|end|finish) (the |this |my )?(whole )?(workout|session|circuit)\b/.test(s) || /^i('m| am) done$/.test(s))return {action:'finish'};
   if(/\b(pause|hold on|wait a sec|wait a second)\b/.test(s)||s==='stop')return {action:'pause'};
   if(/\b(resume|continue|keep going|let's go|lets go)\b/.test(s))return {action:'resume'};
-  if(/\b(take a break|need a break|rest now|break please|catch my breath)\b/.test(s))return {action:'break'};
-  if(/\b(longer break|more rest|extra rest|more time to rest)\b/.test(s))return {action:'rest_longer'};
-  if(/\b(skip|next exercise|move on)\b/.test(s))return {action:'skip'};
-  if(/\b(struggling|too hard|exhausted|worn out|can't keep up|cannot keep up|tired|easier|slow down|less intense)\b/.test(s))return {action:'struggling'};
+  if(/\b(take a break|need a break|want a break|rest now|break please|catch my breath|pause for a bit)\b/.test(s))return {action:'break'};
+  if(/\b(longer break|more rest|extra rest|more time to rest|extend the break|another (ten|twenty|thirty|[0-9]+) seconds)\b/.test(s))return {action:'rest_longer'};
+  if(/\b(skip|next exercise|move on|do a different (one|exercise)|switch (this|the) exercise)\b/.test(s))return {action:'skip'};
+  if(/\b(struggling|too hard|too much|exhausted|worn out|can't keep up|cannot keep up|not sure i can finish|tired|easier|slow down|slower pace|less intense)\b/.test(s))return {action:'struggling'};
   if(/\b(harder|too easy|more intense|challenge me)\b/.test(s))return {action:'harder'};
   if(/\b(what('s| is) next|next up|coming up)\b/.test(s))return {action:'next'};
+  if(/\b(repeat|explain|how do i do|what (exercise|are we) doing|instructions)\b/.test(s))return {action:'instructions'};
+  if(/\b(how many calories|calories burned|energy burned)\b/.test(s))return {action:'calories'};
   if(/\b(how long|time left|much longer|remaining time|how many seconds)\b/.test(s))return {action:'time'};
-  if(/\b(how many (reps|squats|jacks)|reps (left|done)|my progress)\b/.test(s))return {action:'progress'};
+  if(/\b(how many (reps|squats|jacks)|reps (left|done)|my progress|how am i doing|how are we doing)\b/.test(s))return {action:'progress'};
   if(/\b(undo|remove last rep|that wasn't a rep)\b/.test(s))return {action:'undo'};
   if(/\b(start|begin|ready|let's begin|lets begin)\b/.test(s))return {action:'start'};
   if(/\b(help|what can i say|what do you understand)\b/.test(s))return {action:'help'};
