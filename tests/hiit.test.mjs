@@ -74,3 +74,17 @@ test('natural requests cover check-in, safety, rest and next',()=>{
   assert.equal(parseCoachRequest("no, keep going",'break').action,'decline');
   assert.equal(parseCoachRequest("I feel dizzy").action,'safety');
 });
+
+test('comfortable completed session yields a small bounded progression',()=>{
+  const previous=[{target:11,completed:11,exertion:3}];
+  const base=buildHiitPlan(profile);
+  const next=buildHiitPlan(profile,previous);
+  assert.ok(next.workSeconds > base.workSeconds);
+  assert.match(next.rationale,/comfortably/);
+});
+test('spoken request variants map to bounded session actions',()=>{
+  assert.equal(parseCoachRequest('how am I doing?').action,'progress');
+  assert.equal(parseCoachRequest('can you repeat the instructions?').action,'instructions');
+  assert.equal(parseCoachRequest('how many calories have I burned?').action,'calories');
+  assert.equal(parseCoachRequest('can we do a different exercise?').action,'skip');
+});
