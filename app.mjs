@@ -28,6 +28,7 @@ const state = {
   cloudEnabled:false, cloudAvailable:false, ttsAvailable:false, ttsEnabled:false,
   suppressVoice:false, pendingCoachRequest:false, coachTurns:[], lastMilestone:-1,
   recognitionActive:false, recognitionStarting:false, recognitionRetry:0, speechWatchdog:null,
+  coachRequestId:0, coachAbort:null,
 };
 
 function loadHistory() {
@@ -644,10 +645,10 @@ function performCoachAction(raw) {
   speak(conciseCoachReply(response));
 }
 async function processSmartVoice(text) {
-  if(state.pendingCoachRequest){
-    setCoach("Just a moment, I'm still processing your previous request.");
-    return;
-  }
+  // New requests (especially "pause") must never wait behind a cloud response.
+  if(state.coachAbort){state.coachAbort.abort();state.coachAbort=null;}
+  state.pendingCoachRequest=false;
+  const requestId=++state.coachRequestId;
   const ses=state.hiit;
   const index=ses.index;
   const context=getCoachContext();
@@ -663,6 +664,8 @@ async function processSmartVoice(text) {
   }
   let output;
   state.pendingCoachRequest=true;
+  const controller=new AbortController();
+  state.coachAbort=controller;
   try {
     if(state.cloudEnabled) {
       $('aiStatus').textContent='Gemini is thinking…';
@@ -670,7 +673,7 @@ async function processSmartVoice(text) {
       const response=await fetch('/api/coach',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({transcript:text,context}),
-        signal:AbortSignal.timeout(2600)
+        signal:AbortSignal.any([controller.signal,AbortSignal.timeout(2400)])
       });
       if(!response.ok)throw Error('Cloud request unavailable');
       output=validateCoachResponse(await response.json());
@@ -680,11 +683,14 @@ async function processSmartVoice(text) {
     output=validateCoachResponse(fallbackCoachReply(text,context));
     $('aiStatus').textContent='Gemini unavailable · local coach fallback active';
   }finally {
-    state.pendingCoachRequest=false;
-    if(state.cloudEnabled && $('aiStatus').textContent==='Gemini is thinking…')
-      $('aiStatus').textContent='Gemini conversation active';
+    if(state.coachRequestId===requestId){
+      state.pendingCoachRequest=false;
+      state.coachAbort=null;
+      if(state.cloudEnabled && $('aiStatus').textContent==='Gemini is thinking…')
+        $('aiStatus').textContent='Gemini conversation active';
+    }
   }
-  if(ses!==state.hiit)return;
+  if(state.coachRequestId!==requestId || ses!==state.hiit)return;
   // If the clock moved to the next interval while cloud AI was deciding,
   // do not apply an action to a different exercise.
   if(index!==ses.index && !['none','status','next','instructions','safety'].includes(output.action)){
@@ -775,6 +781,7 @@ function toggleMicrophone() {
         if(item.isFinal){
           $('heardText').textContent='You said: “'+result+'”';
           onVoice(result);
+          break; // A speech result is one turn; don't dispatch old finals twice.
         } else if(!state.pendingCoachRequest){
           $('heardText').textContent='Hearing: “'+result+'…”';
         }
