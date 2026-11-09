@@ -14,5 +14,6 @@ jobs:
         run: |
           node --check app.mjs
           node --check engine.mjs
+          node --check hiit.mjs
       - name: Run workout engine tests
-        run: node --test tests/engine.test.mjs
+        run: node --test tests/*.test.mjs
