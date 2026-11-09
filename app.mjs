@@ -460,7 +460,7 @@ function changeDifficulty(direction) {
 function onVoice(text) {
   $('heardText').textContent = `You said: “${text}”`;
   if(!state.profile){speak('First choose your goal, experience and intensity, then build a HIIT circuit.');return;}
-  if(state.hiit){onHiitVoice(text);return;}
+  if(state.hiit){processSmartVoice(text);return;}
   const command = parseVoiceCommand(text);
   switch (command.action) {
     case 'start': if (state.mode === 'ready') startSession(); else speak('Your workout has already started.'); break;
@@ -487,68 +487,184 @@ function onVoice(text) {
   }
 }
 
-function onHiitVoice(text) {
-  const command=parseCoachRequest(text,state.pendingVoice);
-  // Handle the optional yes/no answer to a proactive fatigue check-in.
-  if(state.pendingVoice==='break' && command.action==='decline'){
-    state.pendingVoice=null;speak('All right. Keep moving at a pace that feels comfortable.');return;
+function getCoachContext() {
+  const s=state.hiit;
+  return {status:s?.status||'ready',
+    stage:s?.stage?{kind:s.stage.kind,exercise:s.stage.exercise,targetReps:s.stage.targetReps}:null,
+    currentReps:state.count,remainingSeconds:Math.ceil(s?.remaining||0),
+    upcomingExercise:s?.stages.slice(s.index+1).find(x=>x.kind==='work')?.exercise||null,
+    pending:state.pendingVoice,
+    turns:state.coachTurns.slice(-6)};
+}
+function maybeAnnounceReps() {
+  const s=state.hiit;
+  if(!s || s.status!=='active' || s.stage?.kind!=='work')return;
+  const target=Number(s.stage.targetReps)||0;
+  if(target) {
+    const remain=target-state.count;
+    if(remain>0 && remain<=3 && state.lastMilestone!==remain) {
+      state.lastMilestone=remain;
+      speak(remain===1?'One more!':remain===2?'Two to go!':'Three left. You can do this!');
+    }
+    if(state.count>=target)advanceRepStage();
   }
-  if(command.action!=='unknown')state.pendingVoice=null;
-  switch(command.action){
-    case 'start': case 'resume':
-      if(state.hiit.status==='ready'||state.hiit.status==='paused')startCircuit();
-      else speak('The circuit is already underway.');
-      break;
-    case 'pause':pauseSession();break;
-    case 'finish':finishSession();break;
-    case 'safety':
-      if(state.mode==='active')pauseSession();
-      speak('Stop exercising and rest. If you have severe symptoms, seek urgent medical help.');break;
-    case 'break':takeCircuitBreak();break;
-    case 'rest_longer':
-      if(state.hiit.stage?.kind==='rest' && state.hiit.extendRest(20)) {renderHiitClock();speak('Added twenty seconds to this break.');}
-      else takeCircuitBreak();
-      break;
-    case 'struggling':changeDifficulty(-1);break;
-    case 'harder':changeDifficulty(1);break;
-    case 'skip':{
-      if(state.hiit.status!=='active') {speak('Start the circuit before skipping.');break;}
-      const prev={...state.hiit.stage};
-      for(const e of state.hiit.skip(Date.now())) {
-        if(e.type==='completed')endCircuit('complete',prev);
-        else onStageChanged(prev);
-      }
-      break;
-    }
-    case 'instructions':
-      speak(state.hiit.stage?.kind==='rest'?'Take it easy and breathe during your break.':describeStage(state.hiit.stage));
-      break;
-    case 'calories': {
-      const calories=estimateKcal(state.profile.weightKg,state.hiit.activeSeconds,state.profile.intensity);
-      speak(calories===null?'If you want a rough energy estimate, add your weight in preferences. It is not a measured calorie value.':`About ${calories} kilocalories estimated during active intervals so far. This is a very rough calculation, not a measurement.`);
-      break;
-    }
-    case 'time':
-      speak(`${Math.ceil(state.hiit.remaining)} seconds left in this interval. You're on step ${state.hiit.index+1} of ${state.hiit.stages.length}.`);break;
-    case 'next':{
-      const next=state.hiit.stages.slice(state.hiit.index+1).find(s=>s.kind==='work');
-      speak(next?'Up next is '+HIIT_EXERCISES[next.exercise].name+'.':'This is the final exercise.');break;
-    }
-    case 'progress':
-      if(state.hiit.stage?.kind==='work' && state.exercise!=='plank')speak(`${state.count} reps recorded this interval, and ${Math.ceil(state.hiit.remaining)} seconds left.`);
-      else speak(`${Math.ceil(state.hiit.remaining)} seconds left. Keep breathing comfortably.`);
-      break;
-    case 'undo':adjustRep(-1);speak('Last repetition removed.');break;
-    case 'help':speak('You can ask what is next, how much time is left, request a break, say make it easier, pause, skip, or finish workout.');break;
-    case 'unknown':{
-      const legacy=parseVoiceCommand(text);
-      if(legacy.action==='weekly'){
-        const recent=hiitHistory.filter(h=>Date.parse(h.at)>=Date.now()-7*86400000);
-        speak(`You logged ${recent.length} HIIT sessions in the last seven days.`);break;
-      }
-      speak('I can adjust your workout, offer a break, skip a step or answer questions about your progress. Could you rephrase your request?');
-    }
+}
+function advanceRepStage() {
+  const s=state.hiit;
+  if(s?.status!=='active'||!s.stage?.targetReps||state.count<s.stage.targetReps)return;
+  const previous={...s.stage};
+  const events=s.skip(Date.now());
+  for(const e of events) {
+    if(e.type==='completed')endCircuit('complete',previous);
+    else if(e.type==='stage')onStageChanged(previous);
   }
+}
+function performCoachAction(raw) {
+  const output=validateCoachResponse(raw);
+  const ses=state.hiit;
+  if(!ses)return;
+  const action=output.action;
+  let response=output.reply || 'Of course.';
+  const active=['active','paused'].includes(ses.status);
+  state.suppressVoice=true;
+  // Clear the check-in context after an answer; some actions create a new one.
+  state.pendingVoice=null;
+  try {
+    switch(action){
+      case 'start': case 'resume':
+        if(['ready','paused'].includes(ses.status))startCircuit();
+        else response="We're already moving. Keep going!";
+        break;
+      case 'pause':
+        if(ses.status==='active')pauseSession();
+        else response="You're already taking a breather.";
+        break;
+      case 'finish':
+        if(active)finishSession();
+        else response="Your circuit isn't running yet.";
+        break;
+      case 'safety':
+        if(ses.status==='active')pauseSession();
+        state.reportedEffort=9;state.hiitStruggled=true;
+        response='Stop exercising and rest. If symptoms are severe or persist, seek medical help.';
+        break;
+      case 'easier': case 'feeling_tired':
+        if(active){
+          state.hiitStruggled=true;state.reportedEffort=8;
+          ses.makeEasier();
+          state.pendingVoice='break';
+          response=action==='feeling_tired'?"Thanks for telling me. I've eased the next intervals. Want a little longer to rest?": "Got it, I've shortened your work and added recovery time. Want a break now?";
+        } else response="We can lower the intensity before your next session in preferences.";
+        break;
+      case 'feeling_good':
+        if(!state.hiitStruggled)state.reportedEffort=4;
+        response=output.reply||"Love to hear it. We'll keep a steady pace.";
+        break;
+      case 'harder':
+        if(active){
+          ses.makeHarder();state.reportedEffort=4;
+          response="All right, a little extra challenge. We'll still keep the breaks sensible.";
+        } else response="You can choose a more challenging level in your preferences.";
+        break;
+      case 'take_break':
+        if(active){
+          takeCircuitBreak();
+          response="Absolutely. Let's take a breather.";
+        } else response="Start your workout whenever you're ready.";
+        break;
+      case 'extend_rest': case 'shorten_rest': {
+        if(!active&&ses.status!=='ready'){response="Start a new workout to change the break lengths.";break;}
+        const diff=output.seconds*(action==='shorten_rest'?-1:1);
+        const ok=ses.adjustRests(diff);
+        response=ok?(action==='shorten_rest'?"Sure, I've shortened the remaining breaks.":"No problem, I've added more recovery time.")
+          :"There aren't any upcoming breaks to adjust.";
+        break;
+      }
+      case 'track_reps': case 'add_interval': {
+        if(ses.status==='complete'){response="Let's build a new session before adding exercises.";break;}
+        if(output.exercise==='plank' && action==='track_reps'){
+          response="Planks are timed, not counted. Ask me to add a plank interval instead.";break;
+        }
+        const ok=ses.addExercise(output.exercise,{
+          targetReps:action==='track_reps'?output.reps:null,seconds:30
+        });
+        response=ok?(action==='track_reps'
+          ?`I've added ${output.reps} ${HIIT_EXERCISES[output.exercise].name.toLowerCase()} after your next recovery. I'll count with you.`
+          :`You got it. One more ${HIIT_EXERCISES[output.exercise].name.toLowerCase()} interval is on the plan.`)
+          :"That circuit is already full. Let's finish what we've got.";
+        break;
+      }
+      case 'skip':{
+        if(ses.status!=='active'){response="Start the circuit before skipping an interval.";break;}
+        const previous={...ses.stage};
+        for(const e of ses.skip(Date.now())) {
+          if(e.type==='completed')endCircuit('complete',previous);
+          else if(e.type==='stage')onStageChanged(previous);
+        }
+        response="Okay, we're moving on. Listen for the next exercise.";
+        break;
+      }
+      case 'status':{
+        const stage=ses.stage;
+        response=stage?.targetReps?
+          `${state.count} of ${stage.targetReps} reps done. ${Math.max(0,stage.targetReps-state.count)} to go.`
+          :`You're on step ${Math.min(ses.index+1,ses.stages.length)} of ${ses.stages.length}. ${Math.ceil(ses.remaining)} seconds left in this interval.`;
+        break;
+      }
+      case 'next':{
+        const next=ses.stages.slice(ses.index+1).find(x=>x.kind==='work');
+        response=next?`Next is ${HIIT_EXERCISES[next.exercise].name.toLowerCase()}.`:'This is your final exercise. Nice work!';
+        break;
+      }
+      case 'instructions':
+        response=ses.stage?.kind==='rest'?"It's recovery time. Breathe and get ready for the next move.":describeStage(ses.stage);
+        break;
+      case 'none':default:
+        response=output.reply || "I'm here. You can ask to change the workout or talk through how it's feeling.";
+    }
+  } finally {state.suppressVoice=false;}
+  renderQueue();renderHiitClock();updateProgress();
+  speak(response);
+}
+async function processSmartVoice(text) {
+  if(state.pendingCoachRequest){
+    setCoach("Just a moment, I'm still processing your previous request.");
+    return;
+  }
+  const ses=state.hiit;
+  const index=ses.index;
+  const context=getCoachContext();
+  let output;
+  state.pendingCoachRequest=true;
+  try {
+    if(state.cloudEnabled) {
+      $('aiStatus').textContent='Gemini is thinking…';
+      const response=await fetch('/api/coach',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({transcript:text,context}),
+        signal:AbortSignal.timeout(11000)
+      });
+      if(!response.ok)throw Error('Cloud request unavailable');
+      output=validateCoachResponse(await response.json());
+    } else output=validateCoachResponse(fallbackCoachReply(text,context));
+  }catch {
+    output=validateCoachResponse(fallbackCoachReply(text,context));
+    $('aiStatus').textContent='Gemini unavailable · local coach fallback active';
+  }finally {
+    state.pendingCoachRequest=false;
+    if(state.cloudEnabled && $('aiStatus').textContent==='Gemini is thinking…')
+      $('aiStatus').textContent='Gemini conversation active';
+  }
+  if(ses!==state.hiit)return;
+  // If the clock moved to the next interval while cloud AI was deciding,
+  // do not apply an action to a different exercise.
+  if(index!==ses.index && !['none','status','next','instructions','safety'].includes(output.action)){
+    speak("We've moved to the next exercise while I was thinking. Could you repeat that?");
+    return;
+  }
+  state.coachTurns.push({role:'user',text:text.slice(0,220)},{role:'coach',text:(output.reply||'').slice(0,220)});
+  state.coachTurns=state.coachTurns.slice(-6);
+  performCoachAction(output);
 }
 
 function startSpeechRecognition() {
