@@ -91,6 +91,8 @@ function renderHiitClock() {
   $('stageName').textContent=session.status==='complete'?'Circuit complete!':stage?.kind==='rest'?'Recovery break':(HIIT_EXERCISES[stage?.exercise]?.name||'Ready to begin');
   $('stageRemaining').textContent=formatClock(Math.ceil(session.remaining));
   $('circuitProgress').textContent=`Step ${Math.min(session.index+1,session.stages.length)} / ${session.stages.length}`;
+  const kcal=estimateKcal(state.profile?.weightKg,session.activeSeconds,state.profile?.intensity);
+  $('liveEnergy').textContent=kcal===null?'':'~'+kcal+' kcal estimated';
   $('startCircuitBtn').textContent=session.status==='ready'?'▶ Start guided HIIT':session.status==='paused'?'▶ Resume circuit':session.status==='active'?'Ⅱ Pause circuit':'↻ New circuit';
   $('startCircuitBtn').disabled=false;
   $('editProfileBtn').disabled=session.status==='active'||session.status==='paused';
@@ -669,6 +671,11 @@ function init() {
   $('easierBtn').addEventListener('click',()=>changeDifficulty(-1));
   $('harderBtn').addEventListener('click',()=>changeDifficulty(1));
   $('micBtn').addEventListener('click',toggleMicrophone);
+  $('coachTextForm').addEventListener('submit',e=>{
+    e.preventDefault();const text=$('coachTextInput').value.trim();
+    if(!text)return;
+    $('coachTextInput').value='';onVoice(text);
+  });
   $('effort').addEventListener('input',e=>$('effortValue').textContent=`${e.target.value}/10`);
   $('clearHistory').addEventListener('click',()=>{
     if (!confirm('Delete all WELP workout history stored in this browser?')) return;
