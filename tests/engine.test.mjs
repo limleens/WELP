@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RepCounter, angleDegrees, squatSignal, jackSignal, parseVoiceCommand, suggestTarget, weeklySummary } from '../engine.mjs';
+import { RepCounter, angleDegrees, squatSignal, jackSignal, inspectMovement, parseVoiceCommand, suggestTarget, weeklySummary } from '../engine.mjs';
 
 const point = (x,y) => ({ x,y,visibility:0.99 });
 function squatPose(bent) {
@@ -86,4 +86,28 @@ test('weekly summary excludes older sessions', () => {
  {at:'unknown',exercise:'squat',completed:30,duration:50}
  ],now);
  assert.deepEqual(result,{sessions:2,reps:10,minutes:2});
+});
+
+test('squat inspector exposes numeric landmark diagnostic and posture', () => {
+  const upright=inspectMovement(squatPose(false),'squat');
+  const bent=inspectMovement(squatPose(true),'squat');
+  assert.equal(upright.position,'up');
+  assert.equal(bent.position,'down');
+  assert.match(bent.detail,/Knee/);
+});
+test('fast jumping-jack cycle is counted with two samples per pose', () => {
+  const c=new RepCounter('jack');
+  c.update(jackPose(false),0);
+  c.update(jackPose(false),45);
+  c.update(jackPose(true),100);
+  c.update(jackPose(true),145);
+  c.update(jackPose(false),240);
+  const result=c.update(jackPose(false),285);
+  assert.equal(result.reps,1);
+});
+test('unknown landmarks provide meaningful debugging feedback', () => {
+  const c=new RepCounter('squat');
+  const x=c.update(Array(33).fill(null),500);
+  assert.equal(x.counted,false);
+  assert.match(x.detail,/landmarks unclear/);
 });
