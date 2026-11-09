@@ -244,7 +244,7 @@ function tickCircuit() {
     if(e.type==='completed'){endCircuit('complete',prior);return;}
   }
   if(s.status!=='active')return;
-  if(s.stage.kind==='work' && !state.lastCountdownCue && s.remaining<=10){
+  if(s.stage.kind==='work' && !s.stage.targetReps && !state.lastCountdownCue && s.remaining<=10){
     state.lastCountdownCue=true;
     speak('Ten seconds to go!');
   }
@@ -351,6 +351,7 @@ async function detectCloudCoach() {
 function updateProgress() {
   const amount = state.exercise === 'plank' ? state.seconds : state.count;
   $('completed').textContent = amount;
+  if(state.hiit)renderFocusDisplay();
   $('overlayCount').textContent = amount;
   $('elapsed').textContent = formatClock(elapsedSec());
   $('targetDisplay').textContent = state.hiit?.status==='active'||state.hiit?.status==='paused' ? Math.ceil(state.hiit.remaining) : state.target;
@@ -442,6 +443,8 @@ function adjustRep(delta) {
   state.lastRepAt=Date.now();
   if (state.count < state.target) state.reachAnnounced = false;
   updateProgress();
+  if(delta>0)maybeAnnounceReps();
+  if(state.hiit)renderFocusDisplay();
 }
 function manualRep() { adjustRep(1); }
 function changeDifficulty(direction) {
@@ -762,7 +765,8 @@ function poseLoop(now) {
           state.count = estimate.reps;
           state.lastRepAt=Date.now();
           updateProgress();
-          if (state.count > 0 && state.count % 5 === 0 && state.count < state.target) speak(`${state.count} reps. Keep it up!`);
+          if(state.hiit)maybeAnnounceReps();
+          else if(state.count>0 && state.count%5===0 && state.count<state.target)speak(`${state.count} reps. Keep it up!`);
         }
       } else if (!points) {
         repCounter.suspend();
