@@ -27,7 +27,27 @@
     <header class="topbar"><div class="crumb">STUDIO <span>/</span> <strong id="crumbText">WORKOUT</strong></div><div class="topright"><span class="tag">VOICE-FIRST · ADAPTIVE</span><span id="date"></span></div></header>
     <section id="workoutTab" class="view">
       <div class="hero"><div><div class="eyebrow">YOUR PERSONAL TRAINING COMPANION <span class="sparkle">✳</span></div><h1>Move better.<br/><em>Feel stronger.</em></h1><p>Work out hands-free. Count reps with your camera, control sessions with your voice, and progress at a pace that works for you.</p></div><div class="hero-orb" aria-hidden="true"><div class="orb-ring"></div><div class="orb-core">◉</div></div></div>
-      <div class="studio-grid">
+      <section id="welcomePanel" class="setup-panel">
+  <div class="eyebrow">WELCOME TO WELP / YOUR TRAINING STARTS HERE</div>
+  <h2>Tell your coach what works for you.</h2>
+  <p>A few preferences help us build a manageable bodyweight HIIT circuit. You can adjust them any time. No sign-in required.</p>
+  <form id="profileForm" class="profile-grid">
+    <label>YOUR GOAL<select id="profileGoal"><option value="general">Feel fitter</option><option value="cardio">Improve cardio</option><option value="strength">Build endurance & strength</option><option value="weight">Support weight management</option></select></label>
+    <label>YOUR EXPERIENCE<select id="profileLevel"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
+    <label>YOUR INTENSITY<select id="profileIntensity"><option value="light">Light</option><option value="moderate" selected>Moderate</option><option value="challenging">Challenging</option></select></label>
+    <label>YOUR SESSION LENGTH<select id="profileMinutes"><option value="5">Quick start (about 2–4 min)</option><option value="8">Standard (about 5–8 min)</option><option value="12">Extended (about 8–12 min)</option></select></label>
+    <label>BODY WEIGHT IN KG <small>(OPTIONAL — ONLY FOR A ROUGH CALORIE ESTIMATE)</small><input id="profileWeight" type="number" min="30" max="250" step="0.5" placeholder="e.g. 65" /></label>
+    <div class="profile-cta"><button class="button primary" type="submit">Build my HIIT circuit →</button><small>Intensity is based on your choices and session feedback, not weight. Stop if you feel unwell.</small></div>
+  </form>
+</section>
+<section id="planPanel" class="plan-panel hidden" aria-live="polite">
+ <div class="plan-header"><div><div class="eyebrow muted">YOUR HIIT CIRCUIT</div><h2 id="planTitle">A workout just for you</h2><p id="planReason">Plan built from your choices.</p></div><div class="plan-actions"><button id="editProfileBtn" class="button secondary">Edit preferences</button><button id="startCircuitBtn" class="button primary">▶ Start guided HIIT</button></div></div>
+ <div id="planSteps" class="plan-steps"></div>
+ <div class="plan-live"><strong id="stageName">Ready to begin</strong><span id="stageRemaining">--:--</span><span id="circuitProgress">Step 0 / 0</span></div>
+ <p id="sessionResult" class="session-result hidden"></p>
+ <small class="muted">Work intervals are timed. Squats and jumping jacks are counted when pose tracking works; plank is timed only. Each circuit includes spoken instructions and rest breaks.</small>
+</section>
+<div class="studio-grid">
         <div class="camera-card">
           <div class="card-top"><div><span class="eyebrow muted">LIVE STUDIO</span><h2>Movement tracking</h2></div><span id="cameraStatus" class="status-pill">● Camera off</span></div>
           <div id="cameraShell" class="camera-shell">
@@ -52,12 +72,12 @@
         </div>
       </div>
       <section class="coach-card">
-        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach Pace</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “start workout” · “make it easier” · “undo rep” · “how was my week?”</div></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
+        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach WELP</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “start workout” · “I need a break” · “what’s next?” · “make it easier”</div></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
       </section>
       <div class="bottom-note"><span>✦ Built for bodyweight exercises at home</span><span>Movement counting is experimental; always stop if you're uncomfortable.</span></div>
     </section>
     <section id="historyTab" class="view hidden"><div class="page-heading"><div class="eyebrow">SMALL STEPS ADD UP</div><h1>Your progress.</h1><p>Each session helps WELP suggest your next target.</p></div><div class="history-summary"><div><small>COMPLETED SESSIONS</small><strong id="totalSessions">0</strong></div><div><small>LAST 7 DAYS</small><strong id="weeklySessions">0</strong></div><div><small>TOTAL REPS</small><strong id="totalReps">0</strong></div><div><small>ACTIVE MINUTES</small><strong id="totalMinutes">0</strong></div></div><div class="history-header"><h2>Previous sessions</h2><button id="clearHistory" class="text-button">Clear history</button></div><div id="historyList" class="history-list"></div></section>
-    <section id="aboutTab" class="view hidden"><div class="page-heading"><div class="eyebrow">THE IDEA BEHIND PACEPAL</div><h1>Less tapping.<br/><em>More moving.</em></h1><p>Home workouts shouldn't require a second pair of hands. WELP listens to your spoken instructions, observes simple body movements, and suggests future targets based on your own history.</p></div><div class="about-grid"><div class="about-card"><h3>01 / Voice first</h3><p>Start, pause, ask about progress, and adjust difficulty while your hands are busy.</p></div><div class="about-card"><h3>02 / Real-time vision</h3><p>Pose landmarks power a transparent squat and jumping-jack rep counter. No custom model training required.</p></div><div class="about-card"><h3>03 / Adaptive goals</h3><p>Completion and perceived exertion feed a simple, inspectable recommendation rule.</p></div><div class="about-card"><h3>04 / Privacy-minded</h3><p>Pose analysis runs locally. History stays in your browser. Browser speech recognition may use a cloud service.</p></div></div><p class="disclaimer">Demo and learning prototype only. Does not provide medical advice, injury prevention, or professional exercise assessment.</p></section>
+    <section id="aboutTab" class="view hidden"><div class="page-heading"><div class="eyebrow">THE IDEA BEHIND WELP</div><h1>Less tapping.<br/><em>More moving.</em></h1><p>Home workouts shouldn't require a second pair of hands. WELP listens to your spoken instructions, observes simple body movements, and suggests future targets based on your own history.</p></div><div class="about-grid"><div class="about-card"><h3>01 / Voice first</h3><p>Start, pause, ask about progress, and adjust difficulty while your hands are busy.</p></div><div class="about-card"><h3>02 / Real-time vision</h3><p>Pose landmarks power a transparent squat and jumping-jack rep counter. No custom model training required.</p></div><div class="about-card"><h3>03 / Adaptive goals</h3><p>Completion and perceived exertion feed a simple, inspectable recommendation rule.</p></div><div class="about-card"><h3>04 / Privacy-minded</h3><p>Pose analysis runs locally. History stays in your browser. Browser speech recognition may use a cloud service.</p></div></div><p class="disclaimer">Demo and learning prototype only. Does not provide medical advice, injury prevention, or professional exercise assessment.</p></section>
   </main>
 </div>
 <script type="module" src="./app.mjs"></script>
