@@ -12,7 +12,7 @@ const repCounter = new RepCounter('squat');
 const state = {
   exercise: 'squat', target: EXERCISES.squat.base,
   count: 0, seconds: 0, mode: 'ready', startedAt: null, elapsedBeforePause: 0,
-  cameraStream: null, landmarker: null, raf: null, lastFrameAt: 0, lastVideoTime: -1,
+  cameraStream: null, landmarker: null, raf: null, lastFrameAt: 0, lastVideoTime: -1, modelLoading: false,
   recognition: null, listening: false, speaking: false, recognitionRestart: null,
   reachAnnounced: false,
 };
@@ -255,7 +255,7 @@ function drawPose(points) {
 function poseLoop(now) {
   if (!state.cameraStream) return;
   const video = $('camera');
-  if (state.landmarker && video.readyState >= 2 && now - state.lastFrameAt >= 120 && video.currentTime !== state.lastVideoTime) {
+  if (state.landmarker && video.readyState >= 2 && now - state.lastFrameAt >= 55 && video.currentTime !== state.lastVideoTime) {
     state.lastFrameAt = now;
     state.lastVideoTime = video.currentTime;
     const canvas=$('overlay');
@@ -266,18 +266,22 @@ function poseLoop(now) {
       drawPose(points);
       if (state.mode === 'active' && points && state.exercise !== 'plank') {
         const estimate = repCounter.update(points, now);
+        $('poseMessage').textContent = estimate.counted
+          ? `Rep counted! ${estimate.detail}`
+          : `${estimate.detail} · cycle ${estimate.phase}`;
         if (estimate.counted) {
           state.count = estimate.reps;
-          $('poseMessage').textContent = `${EXERCISES[state.exercise].name}: rep detected`;
           updateProgress();
           if (state.count > 0 && state.count % 5 === 0 && state.count < state.target) speak(`${state.count} reps. Keep it up!`);
         }
-      }
-      if (!points) {
+      } else if (!points) {
         repCounter.suspend();
-        $('poseMessage').textContent = 'No body detected. Try stepping back into the frame.';
+        $('poseMessage').textContent = 'No body detected. Step farther back and show your full body.';
+      } else if (state.mode !== 'active') {
+        $('poseMessage').textContent = 'Body detected. Start a session to count repetitions.';
+      } else {
+        $('poseMessage').textContent = 'Timed exercise: plank form is not evaluated.';
       }
-      else if (state.exercise !== 'plank' && state.mode === 'active') $('poseMessage').textContent = 'Pose detected · tracking movement';
     } catch(error) { $('poseMessage').textContent = `Camera tracking error: ${error.message}`; }
   }
   state.raf = requestAnimationFrame(poseLoop);
@@ -294,10 +298,11 @@ async function enableCamera() {
     await $('camera').play();
     $('cameraEmpty').classList.add('hidden');
     $('cameraLiveLabel').classList.remove('hidden');
-    $('cameraStatus').textContent = '● Camera live';
-    $('cameraStatus').classList.add('live');
+    $('cameraStatus').textContent = '● Loading pose model';
+    $('cameraStatus').classList.remove('live');
     $('cameraBtn').textContent = 'Turn camera off';
     $('poseMessage').textContent = 'Loading MediaPipe pose model…';
+    state.modelLoading = true;
     state.raf = requestAnimationFrame(poseLoop);
     try {
       const { PoseLandmarker, FilesetResolver } = await import(mpCdn + '/vision_bundle.mjs');
@@ -307,9 +312,13 @@ async function enableCamera() {
         runningMode: 'VIDEO', numPoses: 1,
         minPoseDetectionConfidence: 0.55, minPosePresenceConfidence: 0.55,
       });
-      $('poseMessage').textContent = 'Pose model ready. Keep your body in view.';
+      $('poseMessage').textContent = 'Pose model ready. Start a session and keep your full body in view.';
+      $('cameraStatus').textContent = '● Pose tracking ready';
+      $('cameraStatus').classList.add('live');
     } catch (error) {
       console.error('MediaPipe initialization failed', error);
+      $('cameraStatus').textContent = '● Model unavailable';
+      $('cameraStatus').classList.remove('live');
       $('poseMessage').textContent = 'Pose model could not load. Manual rep button remains available.';
       setCoach('Camera is on, but pose tracking could not load. Check your internet connection.');
     }
@@ -318,6 +327,7 @@ async function enableCamera() {
     setCoach(`Could not open camera: ${error.message}. You can track reps manually.`);
     stopCamera();
   } finally {
+    state.modelLoading = false;
     $('cameraBtn').disabled = false;
     if (!state.cameraStream) $('cameraBtn').textContent = 'Enable camera';
   }
@@ -330,6 +340,7 @@ function stopCamera() {
   $('camera').srcObject = null;
   state.landmarker?.close();
   state.landmarker = null;
+  state.modelLoading = false;
   repCounter.suspend();
   const canvas=$('overlay');canvas.getContext('2d')?.clearRect(0,0,canvas.width,canvas.height);
   $('cameraEmpty').classList.remove('hidden');
