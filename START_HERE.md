@@ -1,28 +1,44 @@
-# Start here — WELP
+# Start here — WELP HIIT prototype
 
-This starter is a **browser application prototype** with tested non-camera logic. The webcam-based pose tracking and live browser speech features still need manual testing on your own laptop; they cannot be validated by the automated unit tests alone.
+**Pull request:** https://github.com/limleens/WELP/pull/1  
+**Challenge deadline:** Wednesday, 11 November 2026, 11:59 PM GMT
 
-## First 10 minutes
+## Try the guided workout (Chrome recommended)
 
-1. Install Python 3 if you do not have it.
-2. Open the project folder in VS Code.
-3. Start a local server: `python -m http.server 8000` (Windows: `py -3 -m http.server 8000`).
-4. Open http://localhost:8000 in Chrome or Edge.
-5. Without a camera, press **Start session**, click **Add rep manually** twice, then **Finish**. Check **My progress** to confirm persistence.
-6. Next enable camera and wait for MediaPipe to initialize. Standing side-on with full body visible, test squats.
-7. Enable voice commands with the round microphone button; allow your browser's microphone permission. Try: `start workout`, `make it easier`, `how many reps left`, `finish workout`.
+```bash
+git clone https://github.com/limleens/WELP.git
+cd WELP
+git switch feat/welp-home-workout-helper
+python -m http.server 8000
+```
 
-## Next 3 days
+Open **http://localhost:8000**; grant camera/mic permissions when prompted.
 
-**Monday:** Test camera, speech, and squat counting in your actual room. Fix the biggest issue before adding features. Record three clean demo clips.
+1. Enter a goal (e.g., Improve cardio), experience (Beginner), intensity (Light/Moderate), and quick 5-minute session; leave weight blank unless you want a rough calorie estimate.
+2. Click **Build my HIIT circuit**. Review the timed work/rest schedule.
+3. Click **Enable camera**, wait until the status says **Pose tracking ready**. Frame your entire body; squats side-on, jumping jacks facing forward.
+4. Press the microphone button, then say **"start workout"**. Alternatively press **Start guided HIIT**. If speech recognition does not work, type commands into **Ask coach**; spoken outputs may still work.
+5. Perform repetitions and watch the timer and rep counter. At a rest period, WELP should speak the transition and name the next exercise.
+6. Ask **"how much time is left?"**, **"what's next?"**, **"I'm exhausted, make it easier"**, **"give me more rest"**, **"repeat instructions"**, **"skip this"**, or **"finish workout"**.
+7. Test pause/resume and an inserted recovery break. Finish and open **My progress**; saved circuits should remain after refreshing the page.
+8. Generate the next circuit and check that recent difficulty influences the plan.
 
-**Tuesday:** Improve reliability, especially difficult lighting, microphone errors, partial reps, and saving sessions. Decide whether to keep jacks and planks in the demo, based on observed accuracy.
+## Run logic tests
 
-**Wednesday:** Finalize the one-page write-up in your own words, verify README and ai.md, record an optional 2–3 min demo, push a GitHub repository or submit the ZIP. Leave ample time to submit before **Nov 11, 2026, 11:59 PM GMT**.
+```bash
+node --test tests/*.test.mjs
+```
 
-## Important limitations
+Review `ENGINEERING_NOTES.md` to prepare for a Hiya code walkthrough and `ai.md` to accurately disclose AI assistance.
 
-- Live MediaPipe and Web Speech need your own browser tests.
-- Planks are timed, *not* detected by the camera.
-- No exercise-form correction, diagnosis, or advice is offered.
-- Nothing is automatically hosted or pushed to GitHub.
+**Current verification:** automated logic and UI reference checks passed in GitHub Actions. The applicant previously confirmed the underlying revised pose counter works on their device, but **the new guided HIIT flow and conversational speech handling need live browser testing**. Do not claim they are validated until you try them.
+
+## Priority if something breaks
+
+1. Ensure you're on the **feature branch** and hard-refresh with **Ctrl + Shift + R**.
+2. If the camera view is live but reps don't count, check **Pose tracking ready**, **ACTIVE** session status, and the knee/arms diagnostic below the video.
+3. If voice recognition fails, use Chrome, allow microphone permissions, and use the text coach as fallback.
+4. If a timer skips an interval or a request behaves unexpectedly, capture the exact command and visible stage/timer status for debugging.
+5. Record a 2–3 minute optional screen demo as insurance before submitting.
+
+This is an educational prototype, not exercise-related medical advice or a validated form-correction system.
