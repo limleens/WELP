@@ -409,6 +409,14 @@ function onHiitVoice(text) {
       }
       break;
     }
+    case 'instructions':
+      speak(state.hiit.stage?.kind==='rest'?'Take it easy and breathe during your break.':describeStage(state.hiit.stage));
+      break;
+    case 'calories': {
+      const calories=estimateKcal(state.profile.weightKg,state.hiit.activeSeconds,state.profile.intensity);
+      speak(calories===null?'If you want a rough energy estimate, add your weight in preferences. It is not a measured calorie value.':`About ${calories} kilocalories estimated during active intervals so far. This is a very rough calculation, not a measurement.`);
+      break;
+    }
     case 'time':
       speak(`${Math.ceil(state.hiit.remaining)} seconds left in this interval. You're on step ${state.hiit.index+1} of ${state.hiit.stages.length}.`);break;
     case 'next':{
