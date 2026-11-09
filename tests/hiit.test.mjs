@@ -123,3 +123,17 @@ test('harder request increases bounded work and reduces rest',()=>{
   assert.equal(session.remaining,35);
   assert.equal(session.stages[1].seconds,15);
 });
+
+test('live recovery progress remains bounded after voice shortens or extends rest',()=>{
+  const session=new HiitSession({profile,stages:[{kind:'rest',seconds:30}]});
+  session.start(0);session.tick(1000);
+  assert.equal(session.remaining,29);
+  session.adjustRests(-10);
+  assert.equal(session.remaining,19);
+  assert.ok(session.stage.seconds>=session.remaining);
+  session.extendRest(15);
+  assert.equal(session.remaining,34);
+  assert.ok(session.stage.seconds>=session.remaining);
+  const fraction=1-session.remaining/session.stage.seconds;
+  assert.ok(fraction>=0&&fraction<=1);
+});
