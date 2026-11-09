@@ -25,7 +25,9 @@ export function buildHiitPlan(profile=DEFAULT_PROFILE, history=[]) {
   const levelAdd={beginner:-5,intermediate:0,advanced:5};
   const workSec=clamp(intensitySeconds[p.intensity]+levelAdd[p.level],15,45);
   const restSec=p.intensity==='challenging'?20:p.intensity==='moderate'?25:30;
-  const nRounds={5:1,8:2,12:3}[p.minutes];
+  // Choose a whole number of 3-exercise rounds near the requested duration.
+  const nRounds=Array.from({length:7},(_,i)=>i+1).reduce((best,n)=>
+    Math.abs(3*n*workSec+(3*n-1)*restSec-p.minutes*60)<Math.abs(3*best*workSec+(3*best-1)*restSec-p.minutes*60)?n:best,1);
   const orders={
     general:['squat','jack','plank'],
     cardio:['jack','squat','jack'],
