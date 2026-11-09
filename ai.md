@@ -1,28 +1,37 @@
-# AI usage disclosure — PacePal
+# WELP — AI tools and model disclosure (Hiya Voice AI Challenge)
 
-> **Important:** This is a starting disclosure generated with AI assistance. Review and edit it before submission to reflect what you actually did, verified, and changed.
+> Applicant: verify and personalize this description before submission. Do not claim tests or providers you have not personally exercised.
 
-## Coding assistance
+## AI tools used during development
 
-- **OpenAI ChatGPT (GPT-6)** was used to brainstorm the product concept, scope the prototype, draft JavaScript/CSS/HTML modules, create unit tests, and prepare initial documentation.
-- The application code and all claims must be reviewed by the submitting developer. Static logic tests can be run using `node --test tests/*.test.mjs`.
+- **OpenAI ChatGPT (GPT-6):** Helped brainstorm the project, choose the product direction, write and revise the browser UI, develop pose-based rep-counting rules, implement a HIIT plan/state machine, prototype a conversational Gemini connection with validated tool actions, create test cases, interpret GitHub Actions failures, and prepare documentation.
+- **GitHub connector and GitHub Actions:** Used to edit the linked source repository on a feature branch and run Node syntax checks and unit tests.
+- **User decisions and verification:** The applicant selected WELP, home HIIT, conversational coaching, and phone-first design; provided webcam tracking feedback and confirmed earlier movement-tracking improvements. Applicant still needs to manually test the optional Gemini, TTS, mobile UI and full guided workflow.
 
-## Models and AI in the application
+## AI used by the running prototype
 
-- **MediaPipe Pose Landmarker Lite**: pretrained pose-estimation model for on-device 33-point body landmark estimation. Our own deterministic movement state machine counts squats and jumping jacks from these landmarks.
-- **Browser Web Speech API**: built-in browser speech recognition and speech synthesis powers hands-free voice commands and audible coaching. Recognition implementation and backend may vary by browser.
-- **Adaptive planner**: deterministic heuristic based on completed exercise target and user-reported exertion; does **not** call an LLM or pretend to measure fatigue from audio/video.
+1. **Google MediaPipe Pose Landmarker Lite:** A pretrained model locally estimates body landmarks from the camera. WELP uses a custom, rule-based state machine to count squats and jumping jacks. No exercise model was custom-trained.
+2. **Browser SpeechRecognition:** Transcribes spoken commands. Some browser implementations process speech on vendor servers. **Browser SpeechSynthesis** reads coaching text aloud.
+3. **Google Gemini** (optional, configured by the developer with `GEMINI_API_KEY` on a local Node server): Conversational text model maps free-form user speech into a brief natural reply and a structured workout action. The app validates action types, exercise names, repetition counts and time adjustments before applying them. **The API key never goes into frontend code.** Without a key, the app uses an extended deterministic phrase interpreter.
+4. **Optional Gemini TTS:** An optional server-side expressive speech model is enabled by `GEMINI_TTS=1`; browser voices are used if unavailable or too slow. TTS costs and responsiveness depend on model access.
 
-## What was NOT used
+## What isn't claimed
 
-- No custom-trained workout classification model.
-- No AI-powered injury diagnosis or medically validated form correction.
-- No cloud backend or account-based tracking in this MVP.
+- WELP is **not** an autonomous medical or fitness-prescription agent.
+- Gemini does not have authority to bypass the workout controller's constraints.
+- The voice coach does not diagnose exhaustion from silence or camera input; it asks for user feedback.
+- Optional caloric expenditure is an approximation, not a measured value.
+- Real-world speech quality, latency and exercise-count accuracy are not established by unit tests.
 
-## Human review and validation (complete before submitting)
+## Before submitting
 
-- [ ] Personally explain the app's architecture and each major module.
-- [ ] Run unit tests and record the output.
-- [ ] Validate pose tracking and voice commands in the target browser.
-- [ ] Record observed mistakes and limitations in the submission write-up.
-- [ ] Document any additional AI coding tools (Cursor, Copilot, etc.) you used.
+- [ ] Confirm actual Gemini API availability with your own key (and avoid exposing it).
+- [ ] Test voice transcription, conversational response, and voice playback in Chrome.
+- [ ] Try adding "10 more jumping jacks" and verify a real rep-target interval appears.
+- [ ] Verify spoken rest check-in every third break, shorter/longer rests and workout pause/resume.
+- [ ] Run `node --test tests/*.test.mjs` and view GitHub Actions.
+- [ ] List any other AI coding tools you used yourself (e.g., Cursor or Copilot).
+
+
+## Latency-focused iteration (November 9)
+ChatGPT reviewed public Gemini Live, LiveKit Agents, and Pipecat example repositories for **conceptual patterns only**; it did not copy code from them. It drafted an instant local command fast path, a browser speech-recognition restart manager, shortened voice cues, model request supersession, and regression tests. The applicant should verify speech responsiveness on real hardware. Full streaming/barge-in has **not** been implemented.

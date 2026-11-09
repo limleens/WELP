@@ -4,19 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#0b101c" />
-  <meta name="description" content="PacePal — a voice-first adaptive home workout companion. Hiya Voice AI Challenge prototype." />
-  <title>PacePal — Your workout, your pace</title>
+  <meta name="description" content="WELP — Home Workout Helper, a voice-first adaptive exercise companion." />
+  <title>WELP — Home Workout Helper</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 <div class="app-shell">
   <aside class="sidebar">
-    <div class="brand"><span class="brand-icon">◉</span><span>pace<span class="brand-accent">pal.</span></span></div>
-    <p class="brand-caption">MOVE AT YOUR OWN PACE</p>
+    <div class="brand"><span class="brand-icon">◉</span><span>we<span class="brand-accent">lp.</span></span></div>
+    <p class="brand-caption">HOME WORKOUT HELPER</p>
     <nav class="nav">
       <button class="nav-item active" data-tab="workout">◈ <span>Workout studio</span></button>
       <button class="nav-item" data-tab="history">▤ <span>My progress</span></button>
-      <button class="nav-item" data-tab="about">◎ <span>About PacePal</span></button>
+      <button class="nav-item" data-tab="about">◎ <span>About WELP</span></button>
     </nav>
     <div class="sidebar-bottom">
       <div class="privacy-mini"><span class="green-dot"></span> Pose tracking runs on device</div>
@@ -27,7 +27,35 @@
     <header class="topbar"><div class="crumb">STUDIO <span>/</span> <strong id="crumbText">WORKOUT</strong></div><div class="topright"><span class="tag">VOICE-FIRST · ADAPTIVE</span><span id="date"></span></div></header>
     <section id="workoutTab" class="view">
       <div class="hero"><div><div class="eyebrow">YOUR PERSONAL TRAINING COMPANION <span class="sparkle">✳</span></div><h1>Move better.<br/><em>Feel stronger.</em></h1><p>Work out hands-free. Count reps with your camera, control sessions with your voice, and progress at a pace that works for you.</p></div><div class="hero-orb" aria-hidden="true"><div class="orb-ring"></div><div class="orb-core">◉</div></div></div>
-      <div class="studio-grid">
+      <section id="welcomePanel" class="setup-panel">
+  <div class="eyebrow">WELCOME TO WELP / YOUR TRAINING STARTS HERE</div>
+  <h2>Tell your coach what works for you.</h2>
+  <p>A few preferences help us build a manageable bodyweight HIIT circuit. You can adjust them any time. No sign-in required.</p>
+  <form id="profileForm" class="profile-grid">
+    <label>YOUR GOAL<select id="profileGoal"><option value="general">Feel fitter</option><option value="cardio">Improve cardio</option><option value="strength">Build endurance & strength</option><option value="weight">Support weight management</option></select></label>
+    <label>YOUR EXPERIENCE<select id="profileLevel"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></label>
+    <label>YOUR INTENSITY<select id="profileIntensity"><option value="light">Light</option><option value="moderate" selected>Moderate</option><option value="challenging">Challenging</option></select></label>
+    <label>YOUR SESSION LENGTH<select id="profileMinutes"><option value="5">Quick start (about 5 min)</option><option value="8">Standard (about 8 min)</option><option value="12">Extended (about 12 min)</option></select></label>
+    <label>BODY WEIGHT IN KG <small>(OPTIONAL — ONLY FOR A ROUGH CALORIE ESTIMATE)</small><input id="profileWeight" type="number" min="30" max="250" step="0.5" placeholder="e.g. 65" /></label>
+    <div class="profile-cta"><button class="button primary" type="submit">Build my HIIT circuit →</button><small>Intensity is based on your choices and session feedback, not weight. Stop if you feel unwell.</small></div>
+  </form>
+</section>
+<section id="planPanel" class="plan-panel hidden" aria-live="polite">
+ <div class="plan-header"><div><div class="eyebrow muted">YOUR HIIT CIRCUIT</div><h2 id="planTitle">A workout just for you</h2><p id="planReason">Plan built from your choices.</p></div><div class="plan-actions"><button id="editProfileBtn" class="button secondary">Edit preferences</button><button id="startCircuitBtn" class="button primary">▶ Start guided HIIT</button></div></div>
+ <div id="planSteps" class="plan-steps"></div>
+ <div class="plan-live"><strong id="stageName">Ready to begin</strong><span id="stageRemaining">--:--</span><span id="circuitProgress">Step 0 / 0</span><span id="liveEnergy" title="Optional rough estimate, not measured calories"></span></div>
+ <p id="sessionResult" class="session-result hidden"></p>
+ <small class="muted">Work intervals are timed. Squats and jumping jacks are counted when pose tracking works; plank is timed only. Your coach will check in on how you feel during selected breaks. Every session can be adjusted hands-free.</small>
+</section>
+<section id="focusDisplay" class="focus-display" aria-live="off">
+  <div class="focus-eyebrow">WELP / LIVE COACH</div>
+  <div id="focusStage" class="focus-stage">Your next workout starts here</div>
+  <div class="focus-stats"><strong id="focusRemaining">READY</strong><span id="focusMeasure">SET YOUR PACE</span></div>
+  <div id="focusTrack" class="focus-track" role="progressbar" aria-label="Current exercise progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="focusFill"></div></div>
+  <div class="focus-foot"><span id="focusHint">Listen for your coach — eyes off the screen</span><span id="focusTotal">0 / 0 intervals</span></div>
+  <div class="focus-buttons"><button id="focusMicBtn" type="button" class="button secondary">🎙 Enable mic</button><button id="focusPauseBtn" type="button" class="button primary">▶ Start</button><button id="focusEndBtn" type="button" class="button secondary" disabled>Finish</button></div>
+</section>
+<div class="studio-grid">
         <div class="camera-card">
           <div class="card-top"><div><span class="eyebrow muted">LIVE STUDIO</span><h2>Movement tracking</h2></div><span id="cameraStatus" class="status-pill">● Camera off</span></div>
           <div id="cameraShell" class="camera-shell">
@@ -45,19 +73,19 @@
           <select id="exerciseSelect"><option value="squat">Bodyweight squats</option><option value="jack">Jumping jacks</option><option value="plank">Timed plank</option></select>
           <div class="target-panel"><span>SESSION GOAL</span><div><strong id="targetDisplay">10</strong><span id="targetUnit">reps</span></div><p id="targetReason">A comfortable starting target for a first session.</p></div>
           <div class="stats-row"><div class="stat"><small>COMPLETED</small><strong id="completed">0</strong></div><div class="stat"><small>ELAPSED</small><strong id="elapsed">00:00</strong></div></div>
-          <label class="field-label" for="effort">HOW HARD DOES IT FEEL? <span id="effortValue">6/10</span></label><input id="effort" type="range" min="1" max="10" step="1" value="6" />
+          <p class="session-note">Your coach will check in by voice during recovery. No need to tap an effort rating.</p>
           <div class="button-grid"><button id="startBtn" class="button primary">▶ Start session</button><button id="finishBtn" class="button secondary" disabled>✓ Finish</button></div>
-          <div class="sub-buttons"><button id="manualBtn">＋ Add rep manually</button><button id="easierBtn">↓ Easier</button><button id="harderBtn">↑ Harder</button></div>
+          <div class="sub-buttons"><button id="manualBtn">＋ Add rep</button><button id="undoBtn">− Undo rep</button><button id="easierBtn">↓ Easier</button><button id="harderBtn">↑ Harder</button></div>
           <div class="cue" id="exerciseCue">Stand facing sideways, with hips, knees, and ankles visible.</div>
         </div>
       </div>
       <section class="coach-card">
-        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach Pace</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “start workout” · “make it easier” · “how many reps left?” · “finish workout”</div></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
+        <div class="coach-avatar">✳</div><div class="coach-copy"><div class="coach-top"><strong>Coach WELP</strong><span id="voiceStatus" class="voice-status">● Voice off</span></div><p id="coachMessage">Hey! Ready when you are. Say “start workout” or use the button to begin.</p><div class="heard" id="heardText">Try: “Add ten jumping jacks” · “Shorten my breaks” · “How am I doing?” · “I need a break”</div><div class="coach-options"><label><input type="checkbox" id="cloudCoachToggle" disabled /> Gemini conversation <span>(opt-in: sends your spoken request and limited workout context to Google)</span></label><label><input type="checkbox" id="neuralVoiceToggle" disabled /> Expressive AI voice <span>(optional, may add delay)</span></label><small id="aiStatus">Local voice commands · Gemini optional</small></div><form id="coachTextForm" class="coach-text-form"><input id="coachTextInput" aria-label="Type a workout request" placeholder="Try a request if your microphone is unavailable…" autocomplete="off"/><button type="submit">Ask coach</button></form></div><button id="micBtn" class="mic-button" title="Toggle voice commands" aria-label="Toggle voice commands">🎙</button>
       </section>
       <div class="bottom-note"><span>✦ Built for bodyweight exercises at home</span><span>Movement counting is experimental; always stop if you're uncomfortable.</span></div>
     </section>
-    <section id="historyTab" class="view hidden"><div class="page-heading"><div class="eyebrow">SMALL STEPS ADD UP</div><h1>Your progress.</h1><p>Each session helps PacePal suggest your next target.</p></div><div class="history-summary"><div><small>COMPLETED SESSIONS</small><strong id="totalSessions">0</strong></div><div><small>TOTAL REPS</small><strong id="totalReps">0</strong></div><div><small>ACTIVE MINUTES</small><strong id="totalMinutes">0</strong></div></div><div class="history-header"><h2>Previous sessions</h2><button id="clearHistory" class="text-button">Clear history</button></div><div id="historyList" class="history-list"></div></section>
-    <section id="aboutTab" class="view hidden"><div class="page-heading"><div class="eyebrow">THE IDEA BEHIND PACEPAL</div><h1>Less tapping.<br/><em>More moving.</em></h1><p>Home workouts shouldn't require a second pair of hands. PacePal listens to your spoken instructions, observes simple body movements, and suggests future targets based on your own history.</p></div><div class="about-grid"><div class="about-card"><h3>01 / Voice first</h3><p>Start, pause, ask about progress, and adjust difficulty while your hands are busy.</p></div><div class="about-card"><h3>02 / Real-time vision</h3><p>Pose landmarks power a transparent squat and jumping-jack rep counter. No custom model training required.</p></div><div class="about-card"><h3>03 / Adaptive goals</h3><p>Completion and perceived exertion feed a simple, inspectable recommendation rule.</p></div><div class="about-card"><h3>04 / Privacy-minded</h3><p>Pose analysis runs locally. History stays in your browser. Browser speech recognition may use a cloud service.</p></div></div><p class="disclaimer">Demo and learning prototype only. Does not provide medical advice, injury prevention, or professional exercise assessment.</p></section>
+    <section id="historyTab" class="view hidden"><div class="page-heading"><div class="eyebrow">SMALL STEPS ADD UP</div><h1>Your progress.</h1><p>Each session helps WELP suggest your next target.</p></div><div class="history-summary"><div><small>COMPLETED SESSIONS</small><strong id="totalSessions">0</strong></div><div><small>LAST 7 DAYS</small><strong id="weeklySessions">0</strong></div><div><small>TOTAL REPS</small><strong id="totalReps">0</strong></div><div><small>ACTIVE MINUTES</small><strong id="totalMinutes">0</strong></div></div><div class="history-header"><h2>Previous sessions</h2><button id="clearHistory" class="text-button">Clear history</button></div><div id="historyList" class="history-list"></div></section>
+    <section id="aboutTab" class="view hidden"><div class="page-heading"><div class="eyebrow">THE IDEA BEHIND WELP</div><h1>Less tapping.<br/><em>More moving.</em></h1><p>Home workouts shouldn't require a second pair of hands. WELP listens to your spoken instructions, observes simple body movements, and suggests future targets based on your own history.</p></div><div class="about-grid"><div class="about-card"><h3>01 / Voice first</h3><p>Start, pause, ask about progress, and adjust difficulty while your hands are busy.</p></div><div class="about-card"><h3>02 / Real-time vision</h3><p>Pose landmarks power a transparent squat and jumping-jack rep counter. No custom model training required.</p></div><div class="about-card"><h3>03 / Adaptive goals</h3><p>Completion and perceived exertion feed a simple, inspectable recommendation rule.</p></div><div class="about-card"><h3>04 / Privacy-minded</h3><p>Pose analysis runs locally. History stays in your browser. Browser speech recognition may use a cloud service.</p></div></div><p class="disclaimer">Demo and learning prototype only. Does not provide medical advice, injury prevention, or professional exercise assessment.</p></section>
   </main>
 </div>
 <script type="module" src="./app.mjs"></script>
