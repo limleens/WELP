@@ -112,6 +112,11 @@ function renderHiitClock() {
   $('startCircuitBtn').textContent=session.status==='ready'?'▶ Start guided HIIT':session.status==='paused'?'▶ Resume circuit':session.status==='active'?'Ⅱ Pause circuit':'↻ New circuit';
   $('startCircuitBtn').disabled=false;
   $('editProfileBtn').disabled=session.status==='active'||session.status==='paused';
+  const running=session.status==='active'||session.status==='paused';
+  document.body.classList.toggle('workout-live',running);
+  $('focusPauseBtn').textContent=session.status==='active'?'Ⅱ Pause':session.status==='paused'?'▶ Resume':session.status==='complete'?'↻ New workout':'▶ Start';
+  $('focusEndBtn').disabled=!running;
+  $('focusMicBtn').textContent=state.listening?'🎙 Listening':'🎙 Enable mic';
   // The compact queue is refreshed on stage transitions and edits.
 }
 function renderFocusDisplay() {
@@ -681,6 +686,7 @@ function stopMicrophone() {
   $('micBtn').classList.remove('listening');
   $('voiceStatus').textContent = '● Voice off';
   $('voiceStatus').classList.remove('live');
+  $('focusMicBtn').textContent='🎙 Enable mic';
 }
 function toggleMicrophone() {
   if (state.listening) { stopMicrophone(); setCoach('Voice commands off. You can still use the buttons.'); return; }
@@ -712,6 +718,7 @@ function toggleMicrophone() {
   $('micBtn').classList.add('listening');
   $('voiceStatus').textContent = '● Listening for commands';
   $('voiceStatus').classList.add('live');
+  $('focusMicBtn').textContent='🎙 Listening';
   startSpeechRecognition();
   setCoach('I’m listening. Say “start workout” to begin, or “help” for commands.');
 }
@@ -900,6 +907,9 @@ function init() {
     $('welcomePanel').classList.remove('hidden');$('planPanel').classList.add('hidden');
   });
   $('startCircuitBtn').addEventListener('click',startCircuit);
+  $('focusPauseBtn').addEventListener('click',startCircuit);
+  $('focusEndBtn').addEventListener('click',()=>{if(state.hiit?.status==='active'||state.hiit?.status==='paused')finishSession();});
+  $('focusMicBtn').addEventListener('click',toggleMicrophone);
   $('date').textContent = new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric'}).format(new Date());
   document.querySelectorAll('[data-tab]').forEach(el=>el.addEventListener('click',()=>showTab(el.dataset.tab)));
   $('cameraBtn').addEventListener('click',enableCamera);
