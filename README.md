@@ -34,6 +34,12 @@ The prototype includes a **Node.js backend proxy** so no API key is exposed to t
 
 **Security:** Never paste your key into `index.html`, `app.mjs`, a public GitHub issue, or the submission write-up. The server binds to `127.0.0.1` for local development; it is **not a production internet-facing API** (no user authentication or rate limits).
 
+## Faster voice responses (November 9 performance iteration)
+
+WELP now executes familiar workout requests **locally and immediately**, even with Gemini turned on; only unfamiliar or ambiguous conversational questions need a cloud request. A short cloud wait (~2.4 seconds) triggers a local fallback rather than leaving a workout hanging. Spoken exercise instructions are shorter; the browser ASR now distinguishes **Listening now** from **Reconnecting mic** and retries after restarts.
+
+For best responsiveness, leave **Expressive AI voice** off initially, as full Gemini TTS responses add extra network delay. If the microphone still seems deaf, watch its live status and try speaking after the short spoken cue completes. **True barge-in (talking over the coach)** isn't fully supported with the browser Web Speech stack; the streaming architecture for that next step is described in [VOICE_PERFORMANCE.md](VOICE_PERFORMANCE.md).
+
 ## The voice-first experience
 
 1. Choose workout goal, experience, intensity, length and optional weight (used **only** for a rough active-energy estimate).
@@ -74,12 +80,13 @@ Browser microphone -> SpeechRecognition -> transcript             |
 
 - `hiit.mjs`: pure HIIT planner, state machine, added rep-target stages and break/workload adjustment.
 - `coach-actions.mjs`: allowlisted AI actions, validation, local intent fallback.
+- `voice-fastpath.mjs`: immediate local routing for time-critical spoken commands and short automatic voice cues.
 - `server.mjs`: optional server-side Gemini text and TTS proxy, plus local static serving. No npm packages required.
 - `engine.mjs`: MediaPipe landmark angle/state-machine rep counting.
 - `app.mjs`: browser camera, speech, session events, UI, local storage and coaching integration.
 - `index.html`, `styles.css`: accessible, responsive interface.
 - `tests/`: Node unit tests for movement, planning, voice actions, server and UI references.
-- `ENGINEERING_NOTES.md`, `ai.md`, `one-page-writeup.md`: engineering and submission materials.
+- `ENGINEERING_NOTES.md`, `VOICE_PERFORMANCE.md`, `ai.md`, `one-page-writeup.md`: engineering, audio-performance and submission materials.
 
 ## Automated tests
 
