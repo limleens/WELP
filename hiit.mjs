@@ -35,12 +35,14 @@ export function buildHiitPlan(profile=DEFAULT_PROFILE, history=[]) {
     weight:['jack','squat','plank']
   };
   const latest=history.filter(h=>h && h.exertion!=null).slice(-1)[0];
-  const struggling=latest && (Number(latest.exertion)>=8 || (Number(latest.completed)/Math.max(1,Number(latest.target)||1))<.75);
-  const adjustment=struggling?0.85:1;
+  const completion=latest?Number(latest.completed)/Math.max(1,Number(latest.target)||1):null;
+  const struggling=latest && (Number(latest.exertion)>=8 || completion<.75);
+  const comfortable=latest && !struggling && completion>=1 && Number(latest.exertion)<=4;
+  const adjustment=struggling?0.85:comfortable?1.05:1;
   const stages=[];
   for(let round=0;round<nRounds;round++) {
     for(const exercise of orders[p.goal]) {
-      stages.push({kind:'work',exercise,seconds:Math.round(workSec*adjustment),round:round+1});
+      stages.push({kind:'work',exercise,seconds:clamp(Math.round(workSec*adjustment),12,50),round:round+1});
       stages.push({kind:'rest',seconds:restSec+(struggling?5:0),round:round+1});
     }
   }
@@ -48,7 +50,7 @@ export function buildHiitPlan(profile=DEFAULT_PROFILE, history=[]) {
   stages.pop();
   return {profile:p,stages,workSeconds:stages.filter(s=>s.kind==='work').reduce((n,s)=>n+s.seconds,0),
     totalSeconds:stages.reduce((n,s)=>n+s.seconds,0),
-    rationale:struggling?'Last session felt tough, so work intervals are shorter and breaks are longer.':'Built around your preferred goal, level and intensity.'};
+    rationale:struggling?'Last session felt tough, so work intervals are shorter and breaks are longer.':comfortable?'You completed your last circuit comfortably, so work intervals are slightly longer.':'Built around your preferred goal, level and intensity.'};
 }
 export function estimateKcal(weightKg, activeSeconds, intensity='moderate') {
   const kg=Number(weightKg);
