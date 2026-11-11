@@ -270,7 +270,7 @@ def build_app():
                                              value="0", label="Select a syllable")
                         chooser_note = gr.Markdown("Choose a character and record only that syllable.")
                         target_panel = gr.HTML(_target_panel("你好", "0")[0])
-                        current_char = gr.Textbox(value="你", visible=False)
+                        current_char = gr.Textbox(value="你好", visible=False)
                         hear_btn = gr.Button("🔊 Hear an example (in context for sandhi)", variant="secondary")
                         speech = gr.Audio(sources=["microphone", "upload"], type="numpy", format="wav",
                                           label="Record pronunciation (one syllable)")
@@ -331,6 +331,7 @@ def build_app():
         assess_btn.click(_assess_and_track, inputs=[speech, hanzi_input, choice, use_asr, active_saved],
                          outputs=[judgement, pitch_plot, transcription])
         hanzi_input.change(_tones_markup, inputs=hanzi_input, outputs=tone_cards)
+        hanzi_input.change(lambda s: _meaning_for_selection(s, "0"), inputs=hanzi_input, outputs=word_meaning)
         hanzi_input.change(_suggest_meaning, inputs=[hanzi_input, active_saved], outputs=sentence_meaning)
         choice.change(_meaning_for_selection, inputs=[hanzi_input, choice], outputs=word_meaning)
         word_input.change(lambda x: meaning_for(x) if x else '', inputs=word_input, outputs=word_meaning)
