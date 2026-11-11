@@ -13,7 +13,7 @@
 - [x] Add conservative refusal for silent, too-short, ambiguous recordings.
 - [x] Add optional offline ASR only when explicitly enabled.
 - [x] Add setup documentation, AI use disclosure, and automated tests.
-- [x] Run automated contour and sandhi tests locally (9 passing).
+- [x] Run automated contour and sandhi tests locally (10 passing).
 - [x] Smoke-test photo OCR fallback with a generated image of 你好.
 - [ ] **Run clean install on the target Windows laptop** and check microphone permissions.
 - [ ] **Test with genuine speaker recordings** of all four tones; log misses/abstentions.
