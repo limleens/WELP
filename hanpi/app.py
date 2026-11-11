@@ -46,7 +46,7 @@ def _target_panel(text: str, index: str):
     return (f'<div id="target-card"><div class="hanzi">{escape(selected.hanzi)}</div>'
             f'<div class="pinyin">{spoken}</div><div class="hint">{note} · '
             f'tone {selected.expected_tone if selected.expected_tone != 5 else "neutral"}'
-            '</div></div>', selected.hanzi)
+            '</div></div>', (''.join(s.hanzi for s in syllables) if selected.written_pinyin != selected.spoken_pinyin else selected.hanzi))
 
 def _sync_text(text):
     syllables, error = _readings(text)
@@ -153,7 +153,7 @@ def build_app():
                 chooser_note = gr.Markdown("Choose a character and record only that syllable.")
                 target_panel = gr.HTML(_target_panel("你好", "0")[0])
                 current_char = gr.Textbox(value="你", visible=False)
-                hear_btn = gr.Button("🔊 Hear an example", variant="secondary")
+                hear_btn = gr.Button("🔊 Hear an example (in context for sandhi)", variant="secondary")
                 speech = gr.Audio(sources=["microphone", "upload"], type="numpy", format="wav",
                                   label="Record pronunciation (one syllable)")
                 with gr.Accordion("Optional: text transcription", open=False):
