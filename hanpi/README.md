@@ -28,7 +28,7 @@ Open **http://127.0.0.1:7860** in your desktop browser and grant microphone acce
 
 1. Start with the sample **你好**, or upload a photo, click **Find Hanzi in photo**, and correct the OCR output if necessary.
 2. Select **你**: its written pinyin is *nǐ*, but before **好** it is normally pronounced *ní* (third-tone sandhi).
-3. Use **Hear an example** (your browser supplies a Mandarin TTS voice if available).
+3. Use **Hear an example** (it plays a whole phrase when the selected syllable changes tone in context; otherwise the single character).
 4. Record yourself saying **ní only**, then press **Analyse my tone**.
 5. View your pitch curve, the estimated contour type, and a correction tip.
 6. Repeat with **好** or try **中国 / 谢谢 / 妈妈**.
