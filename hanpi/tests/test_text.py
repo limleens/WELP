@@ -12,3 +12,9 @@ def test_nihao_sandhi():
 
 def test_empty():
     assert get_syllables("abc") == []
+
+
+def test_reference_speech_uses_phrase_for_sandhi():
+    from app import _target_panel
+    assert _target_panel("你好", "0")[1] == "你好"
+    assert _target_panel("你好", "1")[1] == "好"
