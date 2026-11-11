@@ -70,3 +70,14 @@ Unit tests cover four generated pitch contours, silent recordings, Hanzi filteri
 New code developed for Hanpi. Project-level architecture informed by [Tone.me](https://github.com/tone-me/tone-me) (MIT), [Mandarin Speech Coach](https://github.com/anton-dergunov/mandarin-speech-coach) and [Mandarin Pronunciation Evaluator](https://github.com/FeisalDy/oral_pronunciation_assessment). **No entire source files were copied**. Third-party dependencies include [RapidOCR](https://github.com/RapidAI/RapidOCR), [PyPinyin](https://github.com/mozillazg/python-pinyin) (MIT), and [Parselmouth](https://github.com/YannickJadoul/Parselmouth). Review individual package/model licences if redistributing.
 
 See [ai.md](ai.md) for project and developer AI usage. Photos/recordings are processed locally by default; speech playback may rely on browser/platform services.
+
+
+## ★ Starred collection (offline memory)
+
+Hanpi includes a Starred tab. After recognising Hanzi, choose a character or type a short word from the visible phrase, then select Star word; select Star sentence to save the entire 1–8-character phrase. Each saved entry stores Hanzi, written pinyin, spoken pinyin (with basic sandhi), and its editable English meaning.
+
+From the Starred tab, select a flashcard and choose Practise this again to return to microphone practice, or remove the star. Re-starring updates a definition without creating duplicates or losing past practice attempts.
+
+The library is a SQLite file at hanpi/data/hanpi_library.sqlite3, and persists after restarting the application. Back up the file to preserve your starred collection. The data is local to the computer running Hanpi, not cloud synced; SQLite files are gitignored. Override the path with the HANPI_LIBRARY_PATH environment variable.
+
+A small offline gloss dictionary covers built-in examples. Arbitrary OCR results are NOT automatically translated; users must provide their own English meaning before saving. The tone analysis still expects one isolated syllable rather than a full-sentence recording.
