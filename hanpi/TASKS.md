@@ -41,3 +41,19 @@
 | Silence, missing recording | Clear retry message | Unit tests passed |
 | Spoken Mandarin by multiple speakers | Quality judged cautiously | **Not validated yet** |
 | Connected sentence | Outside current scope | Deliberately unsupported |
+
+
+## Starred library and design improvements (November 11)
+
+- [x] Reviewed GuGu for friendly, card-based visual inspiration (no code copied).
+- [x] Added Starred tab for words and short sentences.
+- [x] Added local SQLite persistence for Hanzi, written/spoken pinyin, meaning, practice count.
+- [x] Avoid duplicate stars and preserve attempt history.
+- [x] Restore starred entries into existing microphone practice.
+- [x] Remove and refresh saved items.
+- [x] Add colour-coded tone cards in Practice tab.
+- [x] Add editable English meanings and offline glosses for built-in examples.
+- [x] Add persistence / dedup / validation regression tests.
+- [ ] Test a clean Windows install and real microphone after reopening saved entry.
+- [ ] Implement reliable sentence-level alignment and natural word-by-word voice playback.
+- [ ] Add automatic translation for arbitrary OCR results and richer articulation diagrams.
